@@ -9,12 +9,12 @@
 | 层级 | 状态 |
 | --- | --- |
 | 文档 | ✅ 独立审计、技术产品方案、分阶段任务与验收、审阅处置、进度记录 |
-| 本地原型 | ✅ 规则包（两套评分、周期迁移、重复系列、权限、写入合同）＋ 工作台原型；75 项测试通过 |
-| 飞书实测 | 🟡 只完成 OpenAPI 幂等探针（`client_token` 创建幂等 ✅；记录更新无版本检查 ⚠️） |
+| 本地原型 | ✅ 规则包（两套评分、周期迁移、重复系列、权限、写入合同）＋ 工作台原型＋安装计划器；82 项测试通过 |
+| 飞书实测 | 🟡 OpenAPI 幂等探针（`client_token` 创建幂等 ✅；记录更新无版本检查 ⚠️）；安装器在真实测试 Base 上建出 F0 表、重复执行 0 写入、合成数据读回一致 ✅ |
 | 内部试用 | ❌ 尚未达到 |
 | 跨企业交付 | ❌ 尚未达到 |
 
-**尚未实现：** 飞书内的工作台（插件组件或妙搭托管）、Base 存储端口、安装器、应用模式三入口页面、两种权限身份的真实验证、第二实例安装、评分公式在飞书中的实现、移动端单日视图。详见 [任务与验收](docs/plan/phase-tasks-and-acceptance.md)。
+**尚未实现：** 飞书内的工作台（插件组件或妙搭托管）、Base 存储端口、评分公式字段、应用模式三入口页面、两种权限身份的真实验证、第二实例安装、评分公式在飞书中的实现、移动端单日视图。详见 [任务与验收](docs/plan/phase-tasks-and-acceptance.md)。
 
 ## 文档
 
@@ -30,6 +30,7 @@
 packages/rules       业务规则唯一来源：评分、周期、重复、权限、写入命令、内存参考端口
 packages/schema      逻辑字段字典 manifest.json 与规范化 hash
 packages/workbench   工作台原型（左日历、右目标、拖入、改期、表单安排、回执）
+packages/installer   安装计划器：清单＋现有结构 → 最小写入步骤（可重复执行）
 fixtures             评分黄金样例（任何飞书实现都必须逐字段对上）
 tools                本地静态服务、OpenAPI 探针、公开前检查脚本
 ```
@@ -61,6 +62,22 @@ node tools/probe-client-token.mjs <probe_base_token> --as bot
 ```
 
 输出请保存到 `local/`（已忽略），不要提交。
+
+## 安装到飞书测试 Base（需要你自己的 lark-cli 用户授权）
+
+默认只打印计划；`--execute` 才写入。安装记录含 Base 标识，只能写在 `local/`（已忽略）。
+
+```bash
+node tools/install-instance.mjs --record local/instances/test-a.json --name "Osborn PA 测试（合成数据）"
+```
+
+```bash
+node tools/install-instance.mjs --record local/instances/test-a.json --name "Osborn PA 测试（合成数据）" --execute
+```
+
+```bash
+node tools/seed-instance.mjs --record local/instances/test-a.json
+```
 
 ## 公开仓库规则
 
