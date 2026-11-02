@@ -62,6 +62,11 @@
 - **B-4** 探针 Base 删除权限。
 - **D-1～D-10** 产品决策，见方案 §15。
 
+### 公开仓库
+- 2026-11-02 创建 public 仓库 https://github.com/gilosbornhello/osborn-pa-feishu ，首次提交 35 个文件，无许可证，未复制旧仓库 Git 历史。推送前运行 `tools/check-public.sh` 并人工核对暂存清单与敏感词（租户域名、Base／表 ID、应用 ID、open_id、个人路径、真实人名）。
+- **公开：** README、`docs/`（审计、方案、任务、审阅处置、进度）、`packages/`（rules、schema、workbench）、`fixtures/`、`tools/`、`.gitignore`、`package.json`、`.claude/launch.json`（本地预览配置）。
+- **仅本地（`local/`，已忽略）：** 三份原始文档（含内部飞书链接、Base／表／字段 ID、机器路径）、测试资源标识与清理办法、OpenAPI 探针原始输出。差分脚本与旧代码 oracle 只在会话临时目录。
+
 ### 下一步
 1. B-1 完成后：建用户所有的 F0 测试 Base → 安装器建 F0 表 → 妙搭 HTML 发布工作台 → 作为应用模式插件组件加载 → 写 Base SDK 端口 → 重跑本地已演示的同一组路径。
 2. 若 H1 嵌入或 SDK 不可用：切 H2（妙搭全栈＋OpenAPI `client_token`）。
