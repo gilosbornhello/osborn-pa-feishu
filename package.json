@@ -1,0 +1,17 @@
+{
+  "name": "osborn-pa-feishu",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Osborn PA business capabilities (goals, projects, workbench scheduling) as an installable Feishu Base product. Phase 1 prototype.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"packages/*/test/*.test.js\" \"tools/test/*.test.js\"",
+    "manifest:hash": "node packages/schema/manifest-hash.mjs",
+    "workbench": "node tools/serve-workbench.mjs",
+    "check:public": "bash tools/check-public.sh"
+  }
+}

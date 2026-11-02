@@ -1,0 +1,177 @@
+{
+  "manifestVersion": 1,
+  "product": "osborn-pa-feishu",
+  "productVersion": "0.1.0",
+  "schemaVersion": "0.1.0",
+  "ruleVersions": ["project-priority@1", "goal-priority@1", "period-shift@1", "recurrence@1", "commands@1", "access-policy@1"],
+  "fixtureVersions": ["scoring-golden@1"],
+  "status": "logical-draft",
+  "note": "Logical schema. Feishu field types are the intended mapping and are NOT yet verified on a live Base unless listed in docs/progress as verified. Physical table/field IDs are generated per instance and stored in that instance's install record, never here.",
+  "profiles": {
+    "F0": ["instance_settings", "members", "projects", "goals", "time_blocks"],
+    "F1": ["instance_settings", "members", "projects", "goals", "time_blocks", "stakeholders", "reviews", "series", "audit_events"]
+  },
+  "tables": [
+    {
+      "logical": "instance_settings", "label": "实例设置", "admin_only": true,
+      "fields": [
+        { "logical": "key", "type": "text", "required": true, "primary": true },
+        { "logical": "value", "type": "text" },
+        { "logical": "updated_by", "type": "user" }
+      ],
+      "seed": [
+        { "key": "instance_id", "value": "<generated at install>" },
+        { "key": "schema_version", "value": "0.1.0" },
+        { "key": "timezone", "value": "Asia/Shanghai" },
+        { "key": "install_state", "value": "new" },
+        { "key": "notifications_enabled", "value": "false" },
+        { "key": "ai_enabled", "value": "false" },
+        { "key": "calendar_projection_enabled", "value": "false" }
+      ]
+    },
+    {
+      "logical": "members", "label": "成员",
+      "fields": [
+        { "logical": "display_label", "type": "text", "primary": true },
+        { "logical": "business_id", "type": "text", "required": true, "system": true },
+        { "logical": "account", "type": "user", "multiple": false, "required": true },
+        { "logical": "product_role", "type": "select", "options": ["admin", "project_admin", "member", "guest"], "default": "member" },
+        { "logical": "active", "type": "checkbox", "default": true }
+      ]
+    },
+    {
+      "logical": "projects", "label": "项目",
+      "fields": [
+        { "logical": "title", "type": "text", "required": true, "primary": true },
+        { "logical": "business_id", "type": "text", "required": true, "system": true },
+        { "logical": "owner", "type": "user", "multiple": false, "required": true },
+        { "logical": "lifecycle", "type": "select", "options": ["not_started", "in_progress", "completed"], "default": "not_started" },
+        { "logical": "attention_state", "type": "select", "options": ["active", "watch", "parked", "archived"], "default": "active" },
+        { "logical": "outcome_text", "type": "text" },
+        { "logical": "due_date", "type": "datetime", "date_only": true },
+        { "logical": "importance_manual", "type": "number", "range": [0, 100], "default": 50 },
+        { "logical": "urgency_manual", "type": "number", "range": [0, 100], "default": 35 },
+        { "logical": "importance_reason", "type": "text" },
+        { "logical": "urgency_reason", "type": "text" },
+        { "logical": "next_review", "type": "datetime", "date_only": true },
+        { "logical": "review_cadence_days", "type": "number", "range": [1, 365] },
+        { "logical": "pinned_quadrant", "type": "select", "options": ["important_urgent", "important_not_urgent", "not_important_urgent", "not_important_not_urgent"] },
+        { "logical": "pinned_tier", "type": "select", "options": ["P0", "P1", "P2", "P3"] },
+        { "logical": "pin_reason", "type": "text" },
+        { "logical": "score_snapshot", "type": "text", "system": true, "note": "JSON of all project-priority@1 intermediates + rule_version + as_of; written by the controlled scorer if Base formulas cannot reproduce the rule" },
+        { "logical": "revision", "type": "number", "system": true, "default": 1 }
+      ]
+    },
+    {
+      "logical": "goals", "label": "目标任务",
+      "fields": [
+        { "logical": "title", "type": "text", "required": true, "primary": true },
+        { "logical": "business_id", "type": "text", "required": true, "system": true },
+        { "logical": "entity_kind", "type": "select", "options": ["objective", "key_result", "task"], "default": "task" },
+        { "logical": "parent_goal", "type": "link", "target": "goals", "multiple": false },
+        { "logical": "project", "type": "link", "target": "projects", "multiple": false },
+        { "logical": "accountable_owner", "type": "user", "multiple": false, "required": true },
+        { "logical": "assignees", "type": "user", "multiple": true },
+        { "logical": "visibility", "type": "select", "options": ["private", "project"], "default": "project" },
+        { "logical": "status", "type": "select", "options": ["not_started", "in_progress", "done", "stalled"], "default": "not_started" },
+        { "logical": "bucket", "type": "select", "options": ["inbox", "today", "tomorrow", "this_week", "next_week", "this_month", "next_month", "this_year", "lifetime"], "default": "inbox" },
+        { "logical": "last_shift_date", "type": "datetime", "date_only": true, "system": true },
+        { "logical": "plan_start_date", "type": "datetime", "date_only": true },
+        { "logical": "due_date", "type": "datetime", "date_only": true },
+        { "logical": "first_completed_at", "type": "datetime", "system": true },
+        { "logical": "completed_at", "type": "datetime", "system": true },
+        { "logical": "archived", "type": "checkbox", "default": false },
+        { "logical": "archived_at", "type": "datetime", "system": true },
+        { "logical": "importance_manual", "type": "number", "range": [0, 100], "default": 50 },
+        { "logical": "urgency_manual", "type": "number", "range": [0, 100], "default": 35 },
+        { "logical": "priority_score", "type": "formula", "rule": "goal-priority@1", "status": "formula-unverified" },
+        { "logical": "quadrant", "type": "formula", "rule": "goal-priority@1", "status": "formula-unverified" },
+        { "logical": "tier", "type": "formula", "rule": "goal-priority@1", "status": "formula-unverified" },
+        { "logical": "note", "type": "text" },
+        { "logical": "kr_unit", "type": "text", "profile": "F1-O" },
+        { "logical": "kr_target", "type": "number", "profile": "F1-O" },
+        { "logical": "kr_current", "type": "number", "profile": "F1-O" },
+        { "logical": "sample_key", "type": "text", "system": true },
+        { "logical": "revision", "type": "number", "system": true, "default": 1 }
+      ]
+    },
+    {
+      "logical": "time_blocks", "label": "时间安排",
+      "fields": [
+        { "logical": "title", "type": "text", "required": true, "primary": true },
+        { "logical": "business_id", "type": "text", "required": true, "system": true },
+        { "logical": "goal", "type": "link", "target": "goals", "multiple": false },
+        { "logical": "owner", "type": "user", "multiple": false, "required": true },
+        { "logical": "start_at", "type": "datetime" },
+        { "logical": "end_at", "type": "datetime" },
+        { "logical": "all_day", "type": "checkbox", "default": false },
+        { "logical": "all_day_start", "type": "datetime", "date_only": true },
+        { "logical": "all_day_end", "type": "datetime", "date_only": true },
+        { "logical": "timezone", "type": "text", "default": "Asia/Shanghai" },
+        { "logical": "state", "type": "select", "options": ["planned", "done", "cancelled"], "default": "planned" },
+        { "logical": "series", "type": "link", "target": "series", "multiple": false, "profile": "F1" },
+        { "logical": "occurrence_key", "type": "text", "system": true, "profile": "F1" },
+        { "logical": "recurrence_exception", "type": "select", "options": ["moved", "cancelled"], "system": true, "profile": "F1" },
+        { "logical": "operation_key", "type": "text", "required": true, "system": true, "unique_required": true },
+        { "logical": "source", "type": "select", "options": ["workbench_drag", "workbench_form", "cli", "agent", "generator", "import"], "system": true },
+        { "logical": "revision", "type": "number", "system": true, "default": 1 },
+        { "logical": "sample_key", "type": "text", "system": true }
+      ]
+    },
+    {
+      "logical": "stakeholders", "label": "相关人", "profile": "F1",
+      "fields": [
+        { "logical": "label", "type": "text", "required": true, "primary": true },
+        { "logical": "project", "type": "link", "target": "projects", "multiple": false, "required": true },
+        { "logical": "influence", "type": "number", "range": [0, 100], "default": 40 },
+        { "logical": "sentiment", "type": "select", "options": ["supportive", "neutral", "blocked"] },
+        { "logical": "next_touchpoint", "type": "datetime", "date_only": true }
+      ]
+    },
+    {
+      "logical": "reviews", "label": "复盘", "profile": "F1",
+      "fields": [
+        { "logical": "conclusion", "type": "text", "primary": true },
+        { "logical": "project", "type": "link", "target": "projects", "multiple": false, "required": true },
+        { "logical": "reviewed_at", "type": "datetime", "required": true },
+        { "logical": "reviewer", "type": "user", "multiple": false },
+        { "logical": "next_review", "type": "datetime", "date_only": true }
+      ]
+    },
+    {
+      "logical": "series", "label": "重复系列", "profile": "F1",
+      "fields": [
+        { "logical": "title", "type": "text", "primary": true },
+        { "logical": "series_id", "type": "text", "required": true, "system": true },
+        { "logical": "generation", "type": "number", "default": 1, "system": true },
+        { "logical": "goal", "type": "link", "target": "goals", "multiple": false },
+        { "logical": "owner", "type": "user", "multiple": false, "required": true },
+        { "logical": "frequency", "type": "select", "options": ["daily", "weekly"] },
+        { "logical": "timezone", "type": "text", "default": "Asia/Shanghai" },
+        { "logical": "start_local", "type": "text", "note": "YYYY-MM-DDTHH:mm or YYYY-MM-DD; wall time in timezone" },
+        { "logical": "all_day", "type": "checkbox" },
+        { "logical": "duration_minutes", "type": "number" },
+        { "logical": "all_day_span_days", "type": "number" },
+        { "logical": "end_mode", "type": "select", "options": ["date", "rolling"] },
+        { "logical": "until", "type": "datetime", "date_only": true },
+        { "logical": "retired_from", "type": "datetime", "date_only": true, "system": true },
+        { "logical": "supersedes", "type": "text", "system": true },
+        { "logical": "generated_until", "type": "datetime", "date_only": true, "system": true },
+        { "logical": "revision", "type": "number", "default": 1, "system": true }
+      ]
+    },
+    {
+      "logical": "audit_events", "label": "操作记录", "admin_only": true, "profile": "F1",
+      "fields": [
+        { "logical": "operation_key", "type": "text", "primary": true },
+        { "logical": "entity", "type": "text" },
+        { "logical": "business_id", "type": "text" },
+        { "logical": "action", "type": "text" },
+        { "logical": "result", "type": "select", "options": ["committed", "duplicate", "conflict", "rejected", "unknown"] },
+        { "logical": "actor_type", "type": "select", "options": ["human", "cli", "agent", "automation"] },
+        { "logical": "rule_version", "type": "text" },
+        { "logical": "at", "type": "datetime" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Osborn PA 工作台原型</title>
+<link rel="stylesheet" href="./src/workbench.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand"><strong>工作台</strong><span class="tag">本地原型 · 合成数据 · 未接飞书</span></div>
+  <div class="controls">
+    <label>身份 <select id="actor"></select></label>
+    <button id="prev" aria-label="上一周">‹</button>
+    <span id="range" class="range"></span>
+    <button id="next" aria-label="下一周">›</button>
+    <details class="faults">
+      <summary>故障注入</summary>
+      <label><input type="checkbox" id="lose"> 下一次保存响应丢失</label>
+      <button id="otherTab">模拟另一标签页改动首个安排</button>
+      <button id="reload">刷新读回</button>
+      <button id="reset">重置合成数据</button>
+    </details>
+  </div>
+</header>
+<main class="layout">
+  <section class="calendar" aria-label="日历时间安排">
+    <div id="grid" class="grid"></div>
+  </section>
+  <aside class="goals" aria-label="目标">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-view="board" aria-selected="true">目标看板</button>
+      <button role="tab" data-view="priority" aria-selected="false">轻重缓急</button>
+    </div>
+    <p class="hint">拖动目标到左侧时间格安排；或点“安排…”填写时间。两种视图读取同一份目标记录。</p>
+    <div id="goalList"></div>
+  </aside>
+</main>
+<section class="log" aria-live="polite">
+  <h2>保存回执</h2>
+  <ol id="log"></ol>
+</section>
+<dialog id="form">
+  <form method="dialog" id="scheduleForm">
+    <h3 id="formTitle">安排目标</h3>
+    <label>日期 <input type="date" name="date" required></label>
+    <label>开始 <input type="time" name="start" step="1800" required></label>
+    <label>结束 <input type="time" name="end" step="1800" required></label>
+    <p class="formError" id="formError"></p>
+    <menu><button value="cancel" formnovalidate>取消</button><button value="ok" id="formSubmit">保存</button></menu>
+  </form>
+</dialog>
+<script type="module" src="./src/app.js"></script>
+</body>
+</html>

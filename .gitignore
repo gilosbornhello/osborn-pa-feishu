@@ -1,0 +1,32 @@
+# Local-only material: original drafts, live-resource IDs, raw evidence.
+# Never commit anything under local/.
+local/
+
+# Credentials, tokens, auth caches
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.lark/
+.lark-cli/
+.spark/
+**/credentials*
+**/*token*.json
+**/*qrcode*
+**/*.qr.png
+
+# Logs and raw API dumps (may contain tenant data)
+*.log
+logs/
+*.har
+evidence-raw/
+
+# Tooling
+node_modules/
+.DS_Store
+coverage/
+dist/
+.vite/
+.cache/
+.claude/settings.local.json

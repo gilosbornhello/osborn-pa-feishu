@@ -1,0 +1,51 @@
+{
+  "fixtureVersion": "scoring-golden@1",
+  "description": "Synthetic golden cases for project-priority@1 and goal-priority@1. Expected values derived from the legacy algorithm and cross-checked against the legacy functions (see docs/progress). Any Base formula implementation must reproduce every intermediate field, not just the tier.",
+  "timezone": "Asia/Shanghai",
+  "now": "2026-11-02T10:00:00+08:00",
+  "goals": [
+    { "id": "A01", "input": { "importanceManual": 50, "urgencyManual": 35 }, "expect": { "score": 44, "quadrant": "important_not_urgent", "tier": "P2" } },
+    { "id": "A01b", "note": "missing inputs fall back to defaults 50/35", "input": {}, "expect": { "importance": 50, "urgency": 35, "score": 44, "tier": "P2" } },
+    { "id": "A02", "input": { "importanceManual": 50, "urgencyManual": 50 }, "expect": { "score": 50, "quadrant": "important_urgent", "tier": "P0" } },
+    { "id": "A03", "input": { "importanceManual": 100, "urgencyManual": 0 }, "expect": { "score": 62, "quadrant": "important_not_urgent", "tier": "P2" } },
+    { "id": "G-clamp", "note": "out-of-range and non-numeric inputs clamp to 0..100; non-finite becomes 0", "input": { "importanceManual": 140, "urgencyManual": "abc" }, "expect": { "importance": 100, "urgency": 0, "score": 62, "tier": "P2" } }
+  ],
+  "projects": [
+    { "id": "A04", "input": { "importanceManual": 80, "urgencyManual": 20, "attentionState": "active" }, "expect": { "dynamicUrgency": 20, "score": 55, "quadrant": "important_not_urgent", "tier": "P2" } },
+    { "id": "A05", "input": { "importanceManual": 80, "urgencyManual": 20, "dueDate": "2026-11-02", "attentionState": "active" }, "expect": { "deadlinePressure": 30, "dynamicUrgency": 50, "score": 64, "quadrant": "important_urgent", "tier": "P0" } },
+    { "id": "A06", "input": { "importanceManual": 80, "urgencyManual": 20, "attentionState": "active", "stakeholders": [ { "influence": 100, "sentiment": "blocked", "nextTouchpoint": "2026-11-01" } ] }, "expect": { "stakeholderHeatSum": 38, "stakeholderHeat": 28, "dynamicUrgency": 48, "score": 66, "quadrant": "important_not_urgent", "tier": "P1" } },
+    { "id": "A07", "input": { "importanceManual": 100, "urgencyManual": 100, "attentionState": "active", "stakeholders": [ { "influence": 100, "sentiment": "blocked", "nextTouchpoint": "2026-11-01" } ] }, "expect": { "dynamicUrgency": 100, "score": 93, "tier": "P0" } },
+    { "id": "A08-1", "input": { "importanceManual": 0, "urgencyManual": 0, "nextReview": "2026-11-01" }, "expect": { "staleReviewPressure": 3 } },
+    { "id": "A08-6", "input": { "importanceManual": 0, "urgencyManual": 0, "nextReview": "2026-10-27" }, "expect": { "staleReviewPressure": 18 } },
+    { "id": "A08-7", "input": { "importanceManual": 0, "urgencyManual": 0, "nextReview": "2026-10-26" }, "expect": { "staleReviewPressure": 18 } },
+    { "id": "A08-0", "note": "review due today is not overdue", "input": { "importanceManual": 0, "urgencyManual": 0, "nextReview": "2026-11-02" }, "expect": { "staleReviewPressure": 0 } },
+    { "id": "A09", "input": { "importanceManual": 0, "urgencyManual": 0, "stakeholders": [ { "influence": 40, "sentiment": "blocked", "nextTouchpoint": "2026-10-30" } ] }, "expect": { "stakeholderHeatPerPerson": [32], "stakeholderHeat": 28 } },
+    { "id": "A09-default", "note": "missing influence defaults to 40; supportive sentiment adds 0; touchpoint in 2 days adds 8", "input": { "importanceManual": 0, "urgencyManual": 0, "stakeholders": [ { "sentiment": "supportive", "nextTouchpoint": "2026-11-04" } ] }, "expect": { "stakeholderHeatPerPerson": [12] } },
+    { "id": "A10a", "input": { "importanceManual": 10, "urgencyManual": 10, "pinnedQuadrant": "important_urgent" }, "expect": { "score": 9, "derivedQuadrant": "not_important_not_urgent", "quadrant": "important_urgent", "tier": "P0" } },
+    { "id": "A10b", "input": { "importanceManual": 10, "urgencyManual": 10, "pinnedQuadrant": "important_urgent", "pinnedTier": "P3" }, "expect": { "quadrant": "important_urgent", "tier": "P3", "derivedTier": "P0" } },
+    { "id": "A11-null", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": null }, "expect": { "deadlinePressure": 0 } },
+    { "id": "A11-invalid", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-13-45" }, "expect": { "deadlinePressure": 0 } },
+    { "id": "A11-today", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-11-02" }, "expect": { "deadlinePressure": 30 } },
+    { "id": "A11-yesterday", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-11-01" }, "expect": { "deadlinePressure": 34 } },
+    { "id": "A11-31", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-12-03" }, "expect": { "deadlinePressure": 0 } },
+    { "id": "A11-30", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-12-02" }, "expect": { "deadlinePressure": 4 } },
+    { "id": "A11-3", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-11-05" }, "expect": { "deadlinePressure": 24 } },
+    { "id": "A11-7", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-11-09" }, "expect": { "deadlinePressure": 16 } },
+    { "id": "A11-14", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": "2026-11-16" }, "expect": { "deadlinePressure": 9 } },
+    { "id": "A13-active", "input": { "importanceManual": 80, "urgencyManual": 40, "attentionState": "active" }, "expect": { "cooldown": 0, "dynamicUrgency": 40, "score": 61 } },
+    { "id": "A13-parked", "input": { "importanceManual": 80, "urgencyManual": 40, "attentionState": "parked" }, "expect": { "cooldown": 10, "dynamicUrgency": 30, "score": 58 } },
+    { "id": "A13-archived", "input": { "importanceManual": 80, "urgencyManual": 40, "attentionState": "archived" }, "expect": { "cooldown": 25, "dynamicUrgency": 15, "score": 54 } },
+    { "id": "R03-epoch", "note": "Feishu datetime cells arrive as epoch ms; 2026-11-02T00:00+08:00 must count as 'today'. Legacy daysUntil returned null (pressure 0) for non date-only strings.", "input": { "importanceManual": 0, "urgencyManual": 0, "dueDate": 1793548800000 }, "expect": { "deadlinePressure": 30 } }
+  ],
+  "tierBoundaries": [
+    { "score": 41, "expect": "P3" }, { "score": 42, "expect": "P2" },
+    { "score": 63, "expect": "P2" }, { "score": 64, "expect": "P1" },
+    { "score": 81, "expect": "P1" }, { "score": 82, "expect": "P0" }
+  ],
+  "midnight": [
+    { "id": "Q01-235959", "now": "2026-11-01T23:59:59+08:00", "dueDate": "2026-11-02", "expectPressure": 24 },
+    { "id": "Q01-000000", "now": "2026-11-02T00:00:00+08:00", "dueDate": "2026-11-02", "expectPressure": 30 },
+    { "id": "Q01-000001", "now": "2026-11-02T00:00:01+08:00", "dueDate": "2026-11-02", "expectPressure": 30 },
+    { "id": "Q01-utc-evening", "note": "16:30Z on Nov 1 is already Nov 2 in Shanghai", "now": "2026-11-01T16:30:00Z", "dueDate": "2026-11-02", "expectPressure": 30 }
+  ]
+}
