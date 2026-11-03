@@ -102,3 +102,29 @@ test("busy/free redaction hides title and goal from non-owners", () => {
   assert.deepEqual(redactBlockForViewer(bob, block), { id: "tb", ownerId: "u_alice", startMs: 1, endMs: 2, allDay: false, busy: true });
   assert.equal(redactBlockForViewer(alice, block).title, "机密");
 });
+
+test("two tabs over one shared store: a stale tab gets conflict, not a silent overwrite", async () => {
+  let saved = null;
+  const store = { load: () => saved && structuredClone(saved), save: (s) => { saved = structuredClone(s); } };
+  const tab1 = createMemoryPort(seed(), { store });
+  await scheduleGoal(tab1, alice, { goalId: "g1", startMs: T("09:00"), endMs: T("10:00"), operationKey: "op-a" });
+  const tab2 = createMemoryPort(seed(), { store });
+  const [stale] = await tab1.listTimeBlocks();
+  const moved = await rescheduleBlock(tab2, alice, { blockId: stale.id, startMs: T("11:00"), endMs: T("12:00"), expectedRevision: stale.revision, operationKey: "op-move" });
+  assert.equal(moved.status, "committed");
+  const cancel = await cancelBlock(tab1, alice, { blockId: stale.id, expectedRevision: stale.revision, operationKey: "op-cancel" });
+  assert.equal(cancel.status, "conflict");
+  const [kept] = await tab2.listTimeBlocks();
+  assert.equal(kept.startMs, T("11:00"));
+  assert.notEqual(kept.state, "cancelled");
+});
+
+test("failure before commit → unknown, reconcile says not committed, nothing written", async () => {
+  const port = createMemoryPort(seed());
+  port.faults.failNextBeforeCommit = true;
+  const r = await scheduleGoal(port, alice, { goalId: "g1", startMs: T("09:00"), endMs: T("10:00"), operationKey: "op-fail" });
+  assert.equal(r.status, "unknown");
+  assert.equal((await reconcile(port, "op-fail")).status, "not_committed");
+  assert.equal((await port.listTimeBlocks()).length, 0);
+  assert.equal(port.faults.failNextBeforeCommit, false);
+});

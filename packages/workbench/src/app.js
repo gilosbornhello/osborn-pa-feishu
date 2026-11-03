@@ -2,8 +2,9 @@
 //   1. drag a goal from the right panel into a calendar slot   → scheduleGoal (source: workbench_drag)
 //   2. drag an existing block inside the calendar               → rescheduleBlock
 //   3. click "安排…" and fill in a time                         → scheduleGoal (source: workbench_form)
-// Storage is the in-memory reference port persisted to localStorage, so
-// "刷新读回" proves records survive a reload. It is NOT Feishu.
+// Storage is the in-memory reference port backed by localStorage, so
+// "刷新读回" proves records survive a reload and tabs share one store
+// (a stale tab gets a conflict, not a silent overwrite). It is NOT Feishu.
 
 import { createMemoryPort } from "../../rules/src/memory-port.js";
 import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile } from "../../rules/src/commands.js";
@@ -27,14 +28,11 @@ let actorKey = "alice";
 let goalView = "board";
 const pendingDrops = new Map(); // operationKey -> {goalId, startMs, endMs, title}
 
-function loadPort() {
-  let seed = null;
-  try { seed = JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { seed = null; }
-  return createMemoryPort(seed || buildSeed(weekDays(today)[0], TZ), { faults: { latencyMs: 250 } });
-}
-let port = loadPort();
-const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(port.snapshot())); } catch { /* storage unavailable */ } };
-persist();
+const store = {
+  load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { return null; } },
+  save(s) { try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ } },
+};
+const port = createMemoryPort(buildSeed(weekDays(today)[0], TZ), { store, faults: { latencyMs: 250 } });
 
 const $ = (sel) => document.querySelector(sel);
 const actor = () => ({ ...ACTORS[actorKey], source: "workbench" });
@@ -42,6 +40,7 @@ const fmtTime = (ms) => { const p = wallParts(ms, TZ); return `${String(p.hour).
 const newKey = (prefix) => `${prefix}:${crypto.randomUUID()}`;
 
 function logReceipt(label, r, retry) {
+  // retry() re-sends the same operation key and resolves to a receipt.
   const li = document.createElement("li");
   li.className = `st-${r.status}`;
   li.dataset.status = r.status;
@@ -49,27 +48,44 @@ function logReceipt(label, r, retry) {
   if (r.status === "unknown") {
     const rec = document.createElement("button");
     rec.textContent = "对账";
-    rec.onclick = async () => { const x = await reconcile(port, r.operationKey); logReceipt("对账", x); pendingDrops.delete(r.operationKey); render(); };
     const again = document.createElement("button");
     again.textContent = "用同一键重试";
-    again.onclick = retry;
+    const settle = (x) => { if (x.status !== "unknown") { rec.disabled = again.disabled = true; } };
+    rec.onclick = async () => {
+      const x = await reconcile(port, r.operationKey);
+      logReceipt("对账", x);
+      settle(x);
+      if (x.status !== "unknown") pendingDrops.delete(r.operationKey);
+      render();
+    };
+    again.onclick = async () => settle(await retry());
     li.append(rec, again);
   }
   $("#log").prepend(li);
 }
 
+// Runs one command with the fault checkboxes armed for it alone: whatever the
+// outcome (even a rejection before storage), the faults are cleared afterwards
+// so they never leak into a later, unrelated save. exec() must reuse its key.
+async function runCommand(label, exec) {
+  port.faults.loseNextResponse = $("#lose").checked;
+  port.faults.failNextBeforeCommit = $("#failBefore").checked;
+  $("#lose").checked = $("#failBefore").checked = false;
+  let r;
+  try { r = await exec(); } finally { port.faults.loseNextResponse = port.faults.failNextBeforeCommit = false; }
+  logReceipt(label, r, () => runCommand(label, exec));
+  render();
+  return r;
+}
+
 async function runSchedule(goal, range, operationKey, source) {
   pendingDrops.set(operationKey, { goalId: goal.id, ...range, title: goal.title });
   render();
-  port.faults.loseNextResponse = $("#lose").checked;
-  $("#lose").checked = false;
-  const r = await scheduleGoal(port, { ...actor(), source }, { goalId: goal.id, ...range, operationKey, timezone: TZ });
-  if (r.status !== "unknown") pendingDrops.delete(operationKey);
-  persist();
-  logReceipt(`${source === "workbench_drag" ? "拖入" : "表单安排"}「${goal.title}」${fmtTime(range.startMs)}`, r,
-    () => runSchedule(goal, range, operationKey, source));
-  render();
-  return r;
+  return runCommand(`${source === "workbench_drag" ? "拖入" : "表单安排"}「${goal.title}」${fmtTime(range.startMs)}`, async () => {
+    const r = await scheduleGoal(port, { ...actor(), source }, { goalId: goal.id, ...range, operationKey, timezone: TZ });
+    if (r.status !== "unknown") pendingDrops.delete(operationKey);
+    return r;
+  });
 }
 
 function renderGoals(goals) {
@@ -202,10 +218,8 @@ async function onDrop(e, date, slotIndex) {
   } else if (blockId) {
     const block = await port.getTimeBlock(blockId);
     const range = moveRange(block, date, slotIndex, TZ);
-    const r = await rescheduleBlock(port, actor(), { blockId, ...range, expectedRevision: block.revision, operationKey: newKey("move") });
-    persist();
-    logReceipt(`改期「${block.title}」→ ${date.slice(5)} ${fmtTime(range.startMs)}`, r);
-    render();
+    const args = { blockId, ...range, expectedRevision: block.revision, operationKey: newKey("move") };
+    await runCommand(`改期「${block.title}」→ ${date.slice(5)} ${fmtTime(range.startMs)}`, () => rescheduleBlock(port, actor(), args));
   }
 }
 
@@ -215,9 +229,18 @@ function openBlockMenu(e, b) {
   pop.className = "popover";
   pop.style.left = `${e.clientX}px`;
   pop.style.top = `${e.clientY}px`;
-  const act = (label, fn) => { const btn = document.createElement("button"); btn.textContent = label; btn.onclick = async () => { pop.remove(); const r = await fn(); persist(); logReceipt(`${label}「${b.title}」`, r); render(); }; pop.append(btn); };
-  act("完成", () => completeBlock(port, actor(), { blockId: b.id, expectedRevision: b.revision, operationKey: newKey("done") }));
-  act("取消安排", () => cancelBlock(port, actor(), { blockId: b.id, expectedRevision: b.revision, operationKey: newKey("cancel") }));
+  const act = (label, fn, prefix) => {
+    const btn = document.createElement("button");
+    btn.textContent = label;
+    btn.onclick = async () => {
+      pop.remove();
+      const args = { blockId: b.id, expectedRevision: b.revision, operationKey: newKey(prefix) };
+      await runCommand(`${label}「${b.title}」`, () => fn(port, actor(), args));
+    };
+    pop.append(btn);
+  };
+  act("完成", completeBlock, "done");
+  act("取消安排", cancelBlock, "cancel");
   const close = document.createElement("button");
   close.textContent = "关闭";
   close.onclick = () => pop.remove();
@@ -268,10 +291,12 @@ function init() {
     const [first] = (await port.listTimeBlocks()).filter((b) => b.state !== "cancelled").sort((a, b) => a.startMs - b.startMs);
     if (!first) return;
     await port.updateTimeBlockIfRevision(newKey("othertab"), first.id, first.revision, { title: `${first.title}（他处已改）` });
-    persist();
     logReceipt("另一标签页修改（未刷新本页）", { status: "committed", operationKey: "othertab" });
     // Intentionally do not re-render: this tab now holds a stale revision.
   };
+  // Another real tab wrote to the shared store: show its data (this tab's
+  // writes would hit a revision conflict anyway, never overwrite it).
+  window.addEventListener("storage", (e) => { if (e.key === STORE_KEY) render(); });
   document.querySelectorAll(".tabs [role=tab]").forEach((t) => {
     t.onclick = () => {
       goalView = t.dataset.view;
