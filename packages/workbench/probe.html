@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Host Probe</title>
+<style>
+  :root { --bg: #fff; --fg: #1f2329; --muted: #646a73; --ok: #2e7d32; --bad: #c62828; --line: #dee0e3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #1b1b1f; --fg: #e8e8ea; --muted: #a0a3a8; --ok: #81c784; --bad: #ef9a9a; --line: #3a3a40; } }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  p { color: var(--muted); margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  td { border-top: 1px solid var(--line); padding: 6px 4px; vertical-align: top; word-break: break-all; }
+  td:first-child { width: 38%; color: var(--muted); }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<h1>宿主环境探针（只读）</h1>
+<p>检查本页是否运行在多维表格插件容器内，以及 Base JS SDK 能否读取当前 Base。不写入任何数据。</p>
+<table id="out"></table>
+<script type="module">
+// Read-only: loads the Base SDK and lists table names of the host Base.
+const SDK_URLS = [
+  "https://cdn.jsdelivr.net/npm/@lark-base-open/js-sdk@1.0.2/+esm",
+  "https://esm.sh/@lark-base-open/js-sdk@1.0.2",
+];
+const out = document.getElementById("out");
+const row = (k, v, cls = "") => {
+  const tr = out.insertRow();
+  tr.insertCell().textContent = k;
+  const td = tr.insertCell();
+  td.textContent = v;
+  if (cls) td.className = cls;
+};
+const withTimeout = (p, ms, label) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} 超时 ${ms}ms`)), ms))]);
+
+row("页面地址来源", location.origin);
+row("是否在 iframe 内", String(window.parent !== window), window.parent !== window ? "ok" : "");
+row("上级来源（referrer）", document.referrer ? new URL(document.referrer).origin : "（无）");
+row("UA 含 Lark/Feishu", String(/lark|feishu/i.test(navigator.userAgent)));
+
+let sdk = null;
+for (const url of SDK_URLS) {
+  try {
+    sdk = await withTimeout(import(url), 8000, "加载 SDK");
+    row("SDK 加载", new URL(url).host, "ok");
+    break;
+  } catch (e) {
+    row("SDK 加载失败", `${new URL(url).host}: ${e.message}`, "bad");
+  }
+}
+if (sdk?.bitable) {
+  try {
+    const metas = await withTimeout(sdk.bitable.base.getTableMetaList(), 6000, "读取表列表");
+    row("读取当前 Base 表列表", `${metas.length} 张：${metas.map((m) => m.name).join("、")}`, "ok");
+  } catch (e) {
+    row("读取当前 Base 表列表", e.message, "bad");
+  }
+  try {
+    const sel = await withTimeout(sdk.bitable.base.getSelection(), 4000, "读取选区");
+    row("当前选区", JSON.stringify({ table: !!sel?.tableId, view: !!sel?.viewId }), "ok");
+  } catch (e) {
+    row("当前选区", e.message, "bad");
+  }
+}
+row("完成时间", new Date().toISOString());
+</script>
+</body>
+</html>

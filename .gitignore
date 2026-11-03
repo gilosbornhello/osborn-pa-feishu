@@ -30,3 +30,4 @@ dist/
 .vite/
 .cache/
 .claude/settings.local.json
+dist-hosted/
