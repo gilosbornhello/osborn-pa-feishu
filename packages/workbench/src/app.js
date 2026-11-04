@@ -17,7 +17,7 @@ import { BUCKETS } from "../../rules/src/period-shift.js";
 import { addDays, wallParts, wallToInstant } from "../../rules/src/time.js";
 import { GRID, weekDays, slotsPerDay, slotToRange, blockPlacement, moveRange } from "./slots.js";
 import { ACTORS, buildSeed } from "./seed.js";
-import { createBaseSdkPort } from "./base-sdk-port.js";
+import { createBaseSdkPort, withTimeout } from "./base-sdk-port.js";
 
 const TZ = "Asia/Shanghai";
 const STORE_KEY = "osborn-pa-workbench:v1";
@@ -296,9 +296,9 @@ async function connectBase() {
     throw new Error(`无法加载 Base SDK：${e.message}`);
   }
   const { bitable } = sdk;
-  const p = createBaseSdkPort(bitable.base, { tz: TZ });
+  const p = createBaseSdkPort(bitable.base, { tz: TZ, callTimeoutMs: 8000, onStep: ({ what, ok }) => { if (ok) $("#dataTag").textContent = `连接中：${what} ✓`; } });
   await p.loadSchema();
-  const userId = await bitable.bridge.getUserId();
+  const userId = await withTimeout(bitable.bridge.getUserId(), 8000, "读取当前用户 getUserId");
   baseActor = await p.resolveActor(userId);
   port = p;
   const s = await p.loadSchema();
@@ -318,7 +318,8 @@ async function init() {
     sel.disabled = true;
     try {
       // Outside a Base plugin the SDK loads but its calls never answer.
-      await Promise.race([connectBase(), new Promise((_, no) => setTimeout(() => no(new Error("连接多维表格超时（不在插件内？）")), 15000))]);
+      // Each SDK call has its own 8 s timeout naming the call; this is only a backstop.
+      await withTimeout(connectBase(), 90000, "连接多维表格");
       sel.append(new Option(baseActor.label, "base"));
     } catch (e) {
       $("#dataTag").textContent = "未连接";

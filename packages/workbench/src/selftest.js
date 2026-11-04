@@ -2,7 +2,7 @@
 // Base with synthetic data: it creates one time block on a goal you own,
 // moves it, then leaves it cancelled. Nothing is deleted.
 
-import { createBaseSdkPort } from "./base-sdk-port.js";
+import { createBaseSdkPort, withTimeout } from "./base-sdk-port.js";
 import { scheduleGoal, rescheduleBlock, cancelBlock, reconcile } from "../../rules/src/commands.js";
 import { canScheduleGoal } from "../../rules/src/policy.js";
 import { addDays, wallParts, wallToInstant } from "../../rules/src/time.js";
@@ -20,15 +20,21 @@ function row(step, expected, actual, ok) {
   rows.append(tr);
   return ok;
 }
-const timeout = (p, ms, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what}超时`)), ms))]);
-
 async function run() {
-  const { bitable } = await timeout(import(SDK_URL), 8000, "加载 SDK");
-  const port = createBaseSdkPort(bitable.base, { tz: TZ });
-  await timeout(port.loadSchema(), 10000, "读取表结构");
-  row("读取表结构", "成员、项目、目标任务、时间安排四张表与字段齐全", "已读取", true);
+  let embedded;
+  try { embedded = window.top !== window; } catch { embedded = true; }
+  row("运行环境", "在多维表格插件（iframe）内", `${embedded ? "在 iframe 内" : "不在 iframe 内（直接打开的网页）"} · 来源 ${document.referrer ? new URL(document.referrer).hostname.replace(/^[^.]+/, "*") : "无"}`, embedded);
+  const t0 = Date.now();
+  const { bitable } = await withTimeout(import(SDK_URL), 15000, "加载 SDK");
+  row("加载 SDK", "加载成功", `${Date.now() - t0} ms`, true);
+  // Every schema call is timed separately and gets its own row.
+  const port = createBaseSdkPort(bitable.base, {
+    tz: TZ, callTimeoutMs: 15000,
+    onStep: ({ what, ok, ms, error }) => row(what, "有响应", ok ? `${ms} ms` : error, ok),
+  });
+  await port.loadSchema();
 
-  const userId = await bitable.bridge.getUserId();
+  const userId = await withTimeout(bitable.bridge.getUserId(), 15000, "读取当前用户 getUserId");
   const actor = { ...(await port.resolveActor(userId)), source: "workbench_drag" };
   if (!row("识别当前用户", "在成员表中登记，角色不是访客", `${actor.label} · ${actor.role} · id 前缀 ${String(userId).slice(0, 3)}`, actor.registered && actor.role !== "guest")) {
     return row("停止", "—", "当前用户的 id 与成员表账号不匹配，无法继续写入测试", false);

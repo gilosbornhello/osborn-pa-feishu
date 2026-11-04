@@ -59,7 +59,10 @@ function fakeBase() {
   });
   return {
     me, tables, fid, txt,
-    base: { async getTableByName(name) { const t = tables.get(name); if (!t) throw new Error(`no table ${name}`); return t; } },
+    base: {
+      async getTableMetaList() { return [...tables.values()].map((t) => ({ id: t.id, name: t.name })); },
+      async getTableById(id) { const t = [...tables.values()].find((x) => x.id === id); if (!t) throw new Error(`no table ${id}`); return t; },
+    },
   };
 }
 
@@ -199,4 +202,24 @@ test("canonical row is the lowest record id", () => {
   const m = canonicalByOperation([{ id: "rec5", operationKey: "k" }, { id: "rec2", operationKey: "k" }, { id: "rec9", operationKey: "j" }]);
   assert.equal(m.get("k").id, "rec2");
   assert.equal(m.get("j").id, "rec9");
+});
+
+test("loadSchema names the SDK call that hangs and reports each step", async () => {
+  const f = fakeBase();
+  f.tables.get("目标任务").getFieldMetaList = () => new Promise(() => {});
+  const steps = [];
+  const port = createBaseSdkPort(f.base, { callTimeoutMs: 30, onStep: (s) => steps.push(s) });
+  await assert.rejects(port.loadSchema(), /读取字段 目标任务 getFieldMetaList 超时/);
+  assert.deepEqual(steps.map((s) => `${s.ok ? "ok" : "fail"} ${s.what}`), [
+    "ok 读取表列表 getTableMetaList",
+    "ok 打开表 成员 getTableById", "ok 读取字段 成员 getFieldMetaList",
+    "ok 打开表 项目 getTableById", "ok 读取字段 项目 getFieldMetaList",
+    "ok 打开表 目标任务 getTableById", "fail 读取字段 目标任务 getFieldMetaList",
+  ]);
+});
+
+test("loadSchema names a missing table and lists the ones present", async () => {
+  const f = fakeBase();
+  f.tables.delete("时间安排");
+  await assert.rejects(createBaseSdkPort(f.base).loadSchema(), /缺少数据表：时间安排（现有：成员、项目、目标任务、数据表）/);
 });

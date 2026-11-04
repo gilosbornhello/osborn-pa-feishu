@@ -51,17 +51,43 @@ export function canonicalByOperation(rows) {
 
 // ---- port ----
 
-export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialFaults } = {}) {
+/** Reject after ms with a message naming the call, so a hung SDK call is identifiable. */
+export function withTimeout(promise, ms, what) {
+  if (!ms) return promise;
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, no) => { timer = setTimeout(() => no(new Error(`${what} 超时（${ms / 1000} 秒无响应）`)), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialFaults, callTimeoutMs = 0, onStep } = {}) {
   const faults = { loseNextResponse: false, failNextBeforeCommit: false, ...initialFaults };
   let schema = null;
+  // Each schema call is timed on its own and reported, so a hang names its call.
+  async function step(what, fn) {
+    const t0 = Date.now();
+    try {
+      const v = await withTimeout(fn(), callTimeoutMs, what);
+      onStep?.({ what, ok: true, ms: Date.now() - t0 });
+      return v;
+    } catch (err) {
+      onStep?.({ what, ok: false, ms: Date.now() - t0, error: err?.message || String(err) });
+      throw err;
+    }
+  }
 
+  // Uses getTableMetaList (verified in the in-plugin probe) and resolves tables by id.
   async function loadSchema() {
     if (schema) return schema;
+    const list = await step("读取表列表 getTableMetaList", () => base.getTableMetaList());
     const out = {};
     for (const [key, name] of Object.entries(TABLES)) {
-      const table = await base.getTableByName(name);
-      const metas = await table.getFieldMetaList();
-      out[key] = { table, id: table.id, fields: new Map(metas.map((m) => [m.name, m])) };
+      const meta = list.find((t) => t.name === name);
+      if (!meta) throw new Error(`Base 中缺少数据表：${name}（现有：${list.map((t) => t.name).join("、")}）`);
+      const table = await step(`打开表 ${name} getTableById`, () => base.getTableById(meta.id));
+      const metas = await step(`读取字段 ${name} getFieldMetaList`, () => table.getFieldMetaList());
+      out[key] = { table, id: meta.id, fields: new Map(metas.map((m) => [m.name, m])) };
     }
     return (schema = out);
   }
