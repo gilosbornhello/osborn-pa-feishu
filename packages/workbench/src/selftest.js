@@ -71,6 +71,19 @@ async function run() {
   const afterStale = await port.getTimeBlock(a.block.id);
   row("用旧版本取消", "版本冲突，记录未被改动", `${stale.status} · ${afterStale?.state} · rev ${afterStale?.revision}`, stale.status === "conflict" && afterStale?.state === "planned" && afterStale?.revision === 2);
 
+  // Hand edit in the grid: times change, revision stays 2. A caller holding the
+  // old snapshot must get a conflict instead of overwriting the edit.
+  const seen = { startMs: afterStale.startMs, endMs: afterStale.endMs, state: afterStale.state };
+  const s = await port.loadSchema();
+  const fid = (name) => s.timeBlocks.fields.get(name).id;
+  await s.timeBlocks.table.setRecord(a.block.id, { fields: { [fid("start_at")]: seen.startMs + 3600_000, [fid("end_at")]: seen.endMs + 3600_000 } });
+  const handEdited = await port.getTimeBlock(a.block.id);
+  const snap = await cancelBlock(port, actor, { blockId: a.block.id, expectedRevision: 2, expected: seen, operationKey: `selftest-snap:${crypto.randomUUID()}` });
+  const afterSnap = await port.getTimeBlock(a.block.id);
+  row("手工改表后用旧快照取消", "版本冲突，手工改动保留（版本号仍为 2）",
+    `改表后 rev ${handEdited?.revision} · ${snap.status} · ${afterSnap?.state} · ${afterSnap?.startMs === seen.startMs + 3600_000 ? "时间为手工改后的值" : "时间不对"}`,
+    handEdited?.revision === 2 && snap.status === "conflict" && afterSnap?.state === "planned" && afterSnap?.startMs === seen.startMs + 3600_000);
+
   const rec = await reconcile(port, key);
   const recMissing = await reconcile(port, `selftest-none:${crypto.randomUUID()}`);
   row("对账", "已写入的键 → 已存在；没写过的键 → 确认未保存", `${rec.status} / ${recMissing.status}`, rec.status === "duplicate" && recMissing.status === "not_committed");
