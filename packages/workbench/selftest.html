@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>写入自检</title>
+<style>
+:root{--bg:#fff;--fg:#1f2329;--muted:#646a73;--line:#dee0e3;--ok:#2ea121;--bad:#d83931}
+@media (prefers-color-scheme: dark){:root{--bg:#1b1b1f;--fg:#e8e8ea;--muted:#a6a6ad;--line:#3a3a40;--ok:#5fcf55;--bad:#ff6b63}}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:14px/1.6 system-ui,sans-serif}
+h1{font-size:17px;margin:0 0 4px}p{color:var(--muted);margin:0 0 12px}
+table{border-collapse:collapse;width:100%}td{border-top:1px solid var(--line);padding:6px 8px;vertical-align:top}
+.ok{color:var(--ok)}.bad{color:var(--bad);font-weight:600}
+textarea{width:100%;min-height:120px;margin-top:12px;background:transparent;color:inherit;border:1px solid var(--line)}
+</style>
+</head>
+<body>
+<h1>Base 写入自检（仅用于测试 Base）</h1>
+<p>以当前用户身份，在“时间安排”表新建 1 条明天 21:00 的测试块，改期一次，最后把它标为已取消。不删除任何数据。</p>
+<table><tbody id="rows"></tbody></table>
+<p id="summary">运行中…</p>
+<textarea id="copy" readonly aria-label="结果文本，可复制"></textarea>
+<script type="module" src="./selftest.js"></script>
+</body>
+</html>

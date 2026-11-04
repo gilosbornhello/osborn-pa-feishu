@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "product": "osborn-pa-feishu",
   "productVersion": "0.1.0",
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "0.1.1",
   "ruleVersions": ["project-priority@1", "goal-priority@1", "period-shift@1", "recurrence@1", "commands@1", "access-policy@1"],
   "fixtureVersions": ["scoring-golden@1"],
   "status": "logical-draft",
@@ -113,6 +113,7 @@
         { "logical": "occurrence_key", "type": "text", "system": true, "profile": "F1" },
         { "logical": "recurrence_exception", "type": "select", "options": ["moved", "cancelled"], "system": true, "profile": "F1" },
         { "logical": "operation_key", "type": "text", "required": true, "system": true, "unique_required": true },
+        { "logical": "last_operation_key", "type": "text", "system": true, "note": "operation_key of the last applied update; lets a retried update be recognised as already applied" },
         { "logical": "source", "type": "select", "options": ["workbench_drag", "workbench_form", "cli", "agent", "generator", "import"], "system": true },
         { "logical": "revision", "type": "number", "system": true, "default": 1 },
         { "logical": "sample_key", "type": "text", "system": true }

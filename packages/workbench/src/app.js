@@ -2,9 +2,12 @@
 //   1. drag a goal from the right panel into a calendar slot   → scheduleGoal (source: workbench_drag)
 //   2. drag an existing block inside the calendar               → rescheduleBlock
 //   3. click "安排…" and fill in a time                         → scheduleGoal (source: workbench_form)
-// Storage is the in-memory reference port backed by localStorage, so
-// "刷新读回" proves records survive a reload and tabs share one store
-// (a stale tab gets a conflict, not a silent overwrite). It is NOT Feishu.
+// Storage, chosen by the address:
+//   default        in-memory reference port backed by localStorage (synthetic
+//                  data; tabs share one store, a stale tab gets a conflict).
+//   ?data=base     the current Base through the Base JS SDK, as the viewing
+//                  user (only inside a Base plugin). Never falls back to the
+//                  local store if the SDK is unavailable.
 
 import { createMemoryPort } from "../../rules/src/memory-port.js";
 import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile } from "../../rules/src/commands.js";
@@ -14,6 +17,7 @@ import { BUCKETS } from "../../rules/src/period-shift.js";
 import { addDays, wallParts, wallToInstant } from "../../rules/src/time.js";
 import { GRID, weekDays, slotsPerDay, slotToRange, blockPlacement, moveRange } from "./slots.js";
 import { ACTORS, buildSeed } from "./seed.js";
+import { createBaseSdkPort } from "./base-sdk-port.js";
 
 const TZ = "Asia/Shanghai";
 const STORE_KEY = "osborn-pa-workbench:v1";
@@ -32,10 +36,13 @@ const store = {
   load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { return null; } },
   save(s) { try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ } },
 };
-const port = createMemoryPort(buildSeed(weekDays(today)[0], TZ), { store, faults: { latencyMs: 250 } });
+const SDK_URL = "https://cdn.jsdelivr.net/npm/@lark-base-open/js-sdk@1.0.2/+esm";
+const MODE = new URLSearchParams(location.search).get("data") === "base" ? "base" : "local";
+let port = MODE === "local" ? createMemoryPort(buildSeed(weekDays(today)[0], TZ), { store, faults: { latencyMs: 250 } }) : null;
+let baseActor = null; // resolved viewing user in base mode
 
 const $ = (sel) => document.querySelector(sel);
-const actor = () => ({ ...ACTORS[actorKey], source: "workbench" });
+const actor = () => ({ ...(baseActor || ACTORS[actorKey]), source: "workbench" });
 const fmtTime = (ms) => { const p = wallParts(ms, TZ); return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`; };
 const newKey = (prefix) => `${prefix}:${crypto.randomUUID()}`;
 
@@ -274,15 +281,54 @@ $("#scheduleForm").addEventListener("submit", async (e) => {
 });
 
 async function render() {
+  if (!port) return;
   const [goals, blocks] = await Promise.all([port.listGoals(), port.listTimeBlocks()]);
   renderGoals(goals);
   renderCalendar(blocks);
 }
 
-function init() {
+async function connectBase() {
+  $("#dataTag").textContent = "连接当前多维表格…";
+  let sdk;
+  try {
+    sdk = await Promise.race([import(SDK_URL), new Promise((_, no) => setTimeout(() => no(new Error("加载 SDK 超时")), 8000))]);
+  } catch (e) {
+    throw new Error(`无法加载 Base SDK：${e.message}`);
+  }
+  const { bitable } = sdk;
+  const p = createBaseSdkPort(bitable.base, { tz: TZ });
+  await p.loadSchema();
+  const userId = await bitable.bridge.getUserId();
+  baseActor = await p.resolveActor(userId);
+  port = p;
+  const s = await p.loadSchema();
+  let timer = null;
+  const refresh = () => { clearTimeout(timer); timer = setTimeout(render, 300); };
+  for (const t of [s.timeBlocks.table, s.goals.table]) {
+    try { t.onRecordAdd(refresh); t.onRecordModify(refresh); t.onRecordDelete?.(refresh); } catch { /* events optional */ }
+  }
+  $("#dataTag").textContent = `当前多维表格 · ${baseActor.label}${baseActor.registered ? "" : " · 未在成员表登记，只读"} · 写入保证：无原子创建／无条件更新（去重收敛＋写后读回）`;
+}
+
+async function init() {
   const sel = $("#actor");
-  for (const [k, a] of Object.entries(ACTORS)) sel.append(new Option(a.label, k));
-  sel.onchange = () => { actorKey = sel.value; render(); };
+  if (MODE === "base") {
+    document.body.classList.add("mode-base");
+    for (const id of ["#otherTab", "#reset"]) $(id).hidden = true;
+    sel.disabled = true;
+    try {
+      // Outside a Base plugin the SDK loads but its calls never answer.
+      await Promise.race([connectBase(), new Promise((_, no) => setTimeout(() => no(new Error("连接多维表格超时（不在插件内？）")), 15000))]);
+      sel.append(new Option(baseActor.label, "base"));
+    } catch (e) {
+      $("#dataTag").textContent = "未连接";
+      $("#goalList").textContent = `${e.message}。工作台不会改用本地样例数据。请在多维表格插件中打开本页。`;
+      return;
+    }
+  } else {
+    for (const [k, a] of Object.entries(ACTORS)) sel.append(new Option(a.label, k));
+    sel.onchange = () => { actorKey = sel.value; render(); };
+  }
   $("#prev").onclick = () => { viewMonday = addDays(viewMonday, -7); render(); };
   $("#next").onclick = () => { viewMonday = addDays(viewMonday, 7); render(); };
   $("#reload").onclick = () => location.reload();
