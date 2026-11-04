@@ -35,8 +35,10 @@ export function canEditTimeBlock(actor, block) {
 }
 
 /** Busy/free view of someone else's block: interval only, no title or goal. */
+/** Others see only busy/free; a cancelled block is free time, so they get null. */
 export function redactBlockForViewer(actor, block) {
   if (canEditTimeBlock(actor, block) || actor?.role === "admin") return block;
+  if (block.state === "cancelled") return null;
   return { id: block.id, ownerId: block.ownerId, startMs: block.startMs, endMs: block.endMs, allDay: block.allDay, busy: true };
 }
 

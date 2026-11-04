@@ -101,6 +101,8 @@ test("busy/free redaction hides title and goal from non-owners", () => {
   const block = { id: "tb", ownerId: "u_alice", title: "机密", goalId: "g2", startMs: 1, endMs: 2, allDay: false };
   assert.deepEqual(redactBlockForViewer(bob, block), { id: "tb", ownerId: "u_alice", startMs: 1, endMs: 2, allDay: false, busy: true });
   assert.equal(redactBlockForViewer(alice, block).title, "机密");
+  assert.equal(redactBlockForViewer(bob, { ...block, state: "cancelled" }), null, "a cancelled block is free time for others");
+  assert.equal(redactBlockForViewer(alice, { ...block, state: "cancelled" }).state, "cancelled", "the owner still sees it");
 });
 
 test("two tabs over one shared store: a stale tab gets conflict, not a silent overwrite", async () => {

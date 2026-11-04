@@ -180,7 +180,9 @@ function renderCalendar(blocks) {
   const cols = grid.querySelectorAll(".day");
   const all = [...blocks, ...[...pendingDrops.entries()].map(([k, p]) => ({ id: k, pending: true, ownerId: me.userId, state: "planned", ...p }))];
   const placed = all
-    .map((raw) => { const b = raw.pending ? raw : redactBlockForViewer(me, raw); return { b, p: blockPlacement(b, days, TZ) }; })
+    .map((raw) => raw.pending ? raw : redactBlockForViewer(me, raw))
+    .filter(Boolean)
+    .map((b) => ({ b, p: blockPlacement(b, days, TZ) }))
     .filter((x) => x.p)
     .sort((x, y) => x.b.startMs - y.b.startMs);
   const lanesByDay = new Map(); // dayIndex -> array of lane end times
