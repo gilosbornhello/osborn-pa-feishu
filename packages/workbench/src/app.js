@@ -45,13 +45,16 @@ const $ = (sel) => document.querySelector(sel);
 const actor = () => ({ ...(baseActor || ACTORS[actorKey]), source: "workbench" });
 const fmtTime = (ms) => { const p = wallParts(ms, TZ); return `${String(p.hour).padStart(2, "0")}:${String(p.minute).padStart(2, "0")}`; };
 const newKey = (prefix) => `${prefix}:${crypto.randomUUID()}`;
+// Receipts use the same timezone as the calendar, not the browser's.
+const fmtClock = (ms) => { const p = wallParts(ms, TZ); return [p.hour, p.minute, p.second].map((n) => String(n).padStart(2, "0")).join(":"); };
+const snapshotOf = (b) => ({ startMs: b.startMs, endMs: b.endMs, state: b.state });
 
 function logReceipt(label, r, retry) {
   // retry() re-sends the same operation key and resolves to a receipt.
   const li = document.createElement("li");
   li.className = `st-${r.status}`;
   li.dataset.status = r.status;
-  li.textContent = `${new Date().toLocaleTimeString()} ${label} → ${STATUS_LABELS[r.status] || r.status}${r.reason ? `（${r.reason}）` : ""} · key=${(r.operationKey || "").slice(0, 18)}…`;
+  li.textContent = `${fmtClock(Date.now())} ${label} → ${STATUS_LABELS[r.status] || r.status}${r.reason ? `（${r.reason}）` : ""} · key=${(r.operationKey || "").slice(0, 18)}…`;
   if (r.status === "unknown") {
     const rec = document.createElement("button");
     rec.textContent = "对账";
@@ -225,15 +228,26 @@ async function onDrop(e, date, slotIndex) {
   } else if (blockId) {
     const block = await port.getTimeBlock(blockId);
     const range = moveRange(block, date, slotIndex, TZ);
-    const args = { blockId, ...range, expectedRevision: block.revision, operationKey: newKey("move") };
+    const args = { blockId, ...range, expectedRevision: block.revision, expected: snapshotOf(block), operationKey: newKey("move") };
     await runCommand(`改期「${block.title}」→ ${date.slice(5)} ${fmtTime(range.startMs)}`, () => rescheduleBlock(port, actor(), args));
   }
+}
+
+const blockVersion = (b) => `${b.revision}|${b.startMs}|${b.endMs}|${b.state}`;
+// A menu opened on a block that has since moved, changed or disappeared is stale: close it.
+function closeStaleMenu(blocks) {
+  const pop = document.querySelector(".popover[data-block-id]");
+  if (!pop) return;
+  const b = blocks.find((x) => x.id === pop.dataset.blockId);
+  if (!b || blockVersion(b) !== pop.dataset.version) pop.remove();
 }
 
 function openBlockMenu(e, b) {
   document.querySelector(".popover")?.remove();
   const pop = document.createElement("div");
   pop.className = "popover";
+  pop.dataset.blockId = b.id;
+  pop.dataset.version = blockVersion(b);
   pop.style.left = `${e.clientX}px`;
   pop.style.top = `${e.clientY}px`;
   const act = (label, fn, prefix) => {
@@ -241,7 +255,7 @@ function openBlockMenu(e, b) {
     btn.textContent = label;
     btn.onclick = async () => {
       pop.remove();
-      const args = { blockId: b.id, expectedRevision: b.revision, operationKey: newKey(prefix) };
+      const args = { blockId: b.id, expectedRevision: b.revision, expected: snapshotOf(b), operationKey: newKey(prefix) };
       await runCommand(`${label}「${b.title}」`, () => fn(port, actor(), args));
     };
     pop.append(btn);
@@ -285,6 +299,7 @@ async function render() {
   const [goals, blocks] = await Promise.all([port.listGoals(), port.listTimeBlocks()]);
   renderGoals(goals);
   renderCalendar(blocks);
+  closeStaleMenu(blocks);
 }
 
 async function connectBase() {

@@ -10,7 +10,9 @@
 // Receipt statuses:
 //   committed  the write happened now
 //   duplicate  same operationKey already committed; the original result is returned
-//   conflict   expectedRevision is stale; current state is returned
+//   conflict   expectedRevision is stale, or the block no longer matches the
+//              `expected` snapshot the caller saw (e.g. edited by hand in the
+//              table, which does not bump revision); current state is returned
 //   rejected   validation or permission failure; nothing was written
 //   unknown    the outcome could not be confirmed (e.g. response lost);
 //              callers must reconcile(operationKey) instead of retrying blindly
@@ -76,22 +78,31 @@ export async function scheduleGoal(port, actor, { goalId, startMs, endMs, operat
 }
 
 /** Move an existing block (drag inside the calendar, or edit the times). */
-export async function rescheduleBlock(port, actor, { blockId, startMs, endMs, expectedRevision, operationKey }) {
+// `expected` (optional): { startMs, endMs, state } as the caller last saw the
+// block. The port reports a conflict if any given field differs, so an edit
+// that did not bump revision is not silently overwritten.
+export async function rescheduleBlock(port, actor, { blockId, startMs, endMs, expectedRevision, operationKey, expected }) {
   const timeError = validateTimeRange({ startMs, endMs });
   if (timeError) return receipt("rejected", { operationKey, reason: timeError });
-  return updateBlock(port, actor, { blockId, expectedRevision, operationKey, patch: { startMs, endMs } });
+  return updateBlock(port, actor, { blockId, expectedRevision, operationKey, expected, patch: { startMs, endMs } });
 }
 
-export async function cancelBlock(port, actor, { blockId, expectedRevision, operationKey }) {
-  return updateBlock(port, actor, { blockId, expectedRevision, operationKey, patch: { state: "cancelled" } });
+export async function cancelBlock(port, actor, { blockId, expectedRevision, operationKey, expected }) {
+  return updateBlock(port, actor, { blockId, expectedRevision, operationKey, expected, patch: { state: "cancelled" } });
 }
 
 /** Marking a block done does NOT complete its goal (product decision pending, R-01). */
-export async function completeBlock(port, actor, { blockId, expectedRevision, operationKey }) {
-  return updateBlock(port, actor, { blockId, expectedRevision, operationKey, patch: { state: "done" } });
+export async function completeBlock(port, actor, { blockId, expectedRevision, operationKey, expected }) {
+  return updateBlock(port, actor, { blockId, expectedRevision, operationKey, expected, patch: { state: "done" } });
 }
 
-async function updateBlock(port, actor, { blockId, expectedRevision, operationKey, patch }) {
+/** Fields of `expected` that differ from `block` (empty when it still matches). */
+export function snapshotMismatch(block, expected) {
+  if (!expected || !block) return [];
+  return ["startMs", "endMs", "state"].filter((k) => k in expected && expected[k] !== block[k]);
+}
+
+async function updateBlock(port, actor, { blockId, expectedRevision, operationKey, expected, patch }) {
   if (!operationKey) return receipt("rejected", { reason: "operation_key_required" });
   if (!Number.isInteger(expectedRevision)) return receipt("rejected", { operationKey, reason: "expected_revision_required" });
   const block = await port.getTimeBlock(blockId);
@@ -101,7 +112,7 @@ async function updateBlock(port, actor, { blockId, expectedRevision, operationKe
     return receipt("rejected", { operationKey, reason: "block_cancelled" });
   }
   return guard(port, operationKey, async () => {
-    const result = await port.updateTimeBlockIfRevision(operationKey, blockId, expectedRevision, patch);
+    const result = await port.updateTimeBlockIfRevision(operationKey, blockId, expectedRevision, patch, expected);
     if (result.conflict) return receipt("conflict", { operationKey, current: result.block });
     return receipt(result.duplicate ? "duplicate" : "committed", { operationKey, block: result.block });
   });

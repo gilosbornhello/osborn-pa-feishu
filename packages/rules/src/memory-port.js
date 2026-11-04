@@ -8,7 +8,7 @@
 // first and every write saves in the same synchronous step as its check, so
 // a stale tab gets a conflict instead of overwriting newer data.
 
-import { OutcomeUnknownError } from "./commands.js";
+import { OutcomeUnknownError, snapshotMismatch } from "./commands.js";
 
 export function createMemoryPort(seed = {}, options = {}) {
   let goals, projects, blocks, operations, seq;
@@ -89,14 +89,14 @@ export function createMemoryPort(seed = {}, options = {}) {
       if (faults.latencyMs && !faults.nonAtomicCreate) await sleep(faults.latencyMs);
       return maybeLoseResponse({ created: true, block: clone(block) });
     },
-    async updateTimeBlockIfRevision(operationKey, id, expectedRevision, patch) {
+    async updateTimeBlockIfRevision(operationKey, id, expectedRevision, patch, expected) {
       maybeFailBeforeCommit();
       refresh();
       if (operations.has(operationKey)) {
         return maybeLoseResponse({ duplicate: true, block: clone(blocks.get(id)) });
       }
       const current = blocks.get(id);
-      if (current.revision !== expectedRevision) return { conflict: true, block: clone(current) };
+      if (current.revision !== expectedRevision || snapshotMismatch(current, expected).length) return { conflict: true, block: clone(current) };
       const next = { ...current, ...patch, revision: current.revision + 1 };
       blocks.set(id, next);
       operations.set(operationKey, id);

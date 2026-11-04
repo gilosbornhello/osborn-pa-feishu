@@ -223,3 +223,19 @@ test("loadSchema names a missing table and lists the ones present", async () => 
   f.tables.delete("时间安排");
   await assert.rejects(createBaseSdkPort(f.base).loadSchema(), /缺少数据表：时间安排（现有：成员、项目、目标任务、数据表）/);
 });
+
+test("an edit made directly in the table (revision unchanged) → conflict when the caller passes its snapshot", async () => {
+  const { port, actor, blocks, f } = await setup();
+  const { block } = await scheduleGoal(port, actor, { goalId: "recG", startMs: T("09:00"), endMs: T("10:00"), operationKey: "drag:5" });
+  const seen = { startMs: block.startMs, endMs: block.endMs, state: block.state };
+  // Hand edit in the Base grid: only the times change, revision stays 1.
+  await blocks.setRecord(block.id, { fields: { [f.fid(blocks, "start_at")]: T("14:00"), [f.fid(blocks, "end_at")]: T("15:00") } });
+  const r = await cancelBlock(port, actor, { blockId: block.id, expectedRevision: 1, expected: seen, operationKey: "cancel:after-hand-edit" });
+  assert.equal(r.status, "conflict");
+  const now = await port.getTimeBlock(block.id);
+  assert.equal(now.state, "planned");
+  assert.equal(now.startMs, T("14:00"), "the hand edit is kept");
+  const fresh = { startMs: now.startMs, endMs: now.endMs, state: now.state };
+  const ok = await cancelBlock(port, actor, { blockId: block.id, expectedRevision: 1, expected: fresh, operationKey: "cancel:fresh" });
+  assert.equal(ok.status, "committed", "a caller that saw the current values may write");
+});

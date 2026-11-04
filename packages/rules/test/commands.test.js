@@ -128,3 +128,14 @@ test("failure before commit → unknown, reconcile says not committed, nothing w
   assert.equal((await port.listTimeBlocks()).length, 0);
   assert.equal(port.faults.failNextBeforeCommit, false);
 });
+
+test("snapshot check: a change that kept revision is a conflict; a matching snapshot commits", async () => {
+  const port = createMemoryPort(seed());
+  const { block } = await scheduleGoal(port, alice, { goalId: "g1", startMs: T("09:00"), endMs: T("10:00"), operationKey: "op-s1" });
+  const seen = { startMs: block.startMs, endMs: block.endMs, state: block.state };
+  const stale = await rescheduleBlock(port, alice, { blockId: block.id, startMs: T("11:00"), endMs: T("12:00"), expectedRevision: 1, expected: { ...seen, startMs: T("08:00") }, operationKey: "op-s2" });
+  assert.equal(stale.status, "conflict");
+  assert.equal((await port.getTimeBlock(block.id)).startMs, T("09:00"));
+  const ok = await rescheduleBlock(port, alice, { blockId: block.id, startMs: T("11:00"), endMs: T("12:00"), expectedRevision: 1, expected: seen, operationKey: "op-s3" });
+  assert.equal(ok.status, "committed");
+});

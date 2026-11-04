@@ -16,7 +16,7 @@
 // Physical names: tables use the manifest labels, fields use the logical names
 // (see packages/installer/src/plan.js). Domain ids are Base record ids.
 
-import { OutcomeUnknownError } from "../../rules/src/commands.js";
+import { OutcomeUnknownError, snapshotMismatch } from "../../rules/src/commands.js";
 import { wallParts } from "../../rules/src/time.js";
 
 export const TABLES = { members: "成员", projects: "项目", goals: "目标任务", timeBlocks: "时间安排" };
@@ -267,13 +267,14 @@ export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialF
       return maybeLoseResponse({ created: canon.id === recordId, block: canon });
     },
 
-    async updateTimeBlockIfRevision(operationKey, id, expectedRevision, patch) {
+    // `expected` catches edits made directly in the table, which keep revision.
+    async updateTimeBlockIfRevision(operationKey, id, expectedRevision, patch, expected) {
       maybeFailBeforeCommit();
       await loadSchema();
       const current = (await scan("timeBlocks")).map(toBlock).find((b) => b.id === id);
       if (!current) throw new Error(`time block not found: ${id}`);
       if (current.lastOperationKey === operationKey) return maybeLoseResponse({ duplicate: true, block: current });
-      if (current.revision !== expectedRevision) return { conflict: true, block: current };
+      if (current.revision !== expectedRevision || snapshotMismatch(current, expected).length) return { conflict: true, block: current };
       const values = { revision: current.revision + 1, last_operation_key: writeText(operationKey) };
       if ("startMs" in patch) values.start_at = patch.startMs;
       if ("endMs" in patch) values.end_at = patch.endMs;
