@@ -66,9 +66,9 @@ Osborn PA 工作台把“要做的目标”和“什么时候做”放进同一�
 | --- | --- | --- |
 | 图标 | 240×240，无圆角 | `assets/icon-240.png` |
 | 封面图 | 700×436，无圆角 | `assets/cover-700x436.png` |
-| 详情页图片（2–10） | 建议 1160×640，无圆角 | `assets/detail-1-overview.png`、`detail-2-schedule.png`、`detail-3-priority.png`、`detail-4-complete.png` |
+| 详情页图片（2–10） | 建议 1160×640，无圆角 | `assets/detail-1-overview.png`、`detail-2-schedule.png`、`detail-3-priority.png`、`detail-4-complete.png`、`detail-5-sidebar.png` |
 
-> 截图来自测试 Base（合成数据），只截插件区域。正式提交前建议用普通成员身份重截一次（不显示管理员的“故障注入”入口），并去掉测试用目标名。
+> 截图来自上架验证用的空白 Base（合成数据），是上架版边栏插件的真实界面，只截插件区域，不含诊断入口。用 `node tools/marketplace-images.mjs <截图目录>` 重新生成（截图目录里的 `crop.json` 指定插件区域）；原始截图不入库。
 
 ### 帮助文档
 
