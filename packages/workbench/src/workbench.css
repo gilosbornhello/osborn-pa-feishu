@@ -63,3 +63,4 @@ dialog label { display: block; margin: 6px 0; }
 .newgoal input[name=title] { flex: 1 1 140px; min-width: 0; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
 .newgoal select { padding: 3px 4px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
 .newgoal label { font-size: 12px; color: var(--muted); }
+.faults[hidden] { display: none; }

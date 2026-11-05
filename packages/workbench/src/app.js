@@ -351,7 +351,9 @@ async function connectBase() {
   for (const t of [s.timeBlocks.table, s.goals.table]) {
     try { t.onRecordAdd(refresh); t.onRecordModify(refresh); t.onRecordDelete?.(refresh); } catch { /* events optional */ }
   }
-  $("#dataTag").textContent = `当前多维表格 · ${baseActor.label}${baseActor.registered ? "" : " · 未在成员表登记，只读"} · 写入保证：无原子创建／无条件更新（去重收敛＋写后读回）`;
+  $("#dataTag").textContent = `当前多维表格 · ${baseActor.label}${baseActor.registered ? "" : " · 未在成员表登记，只读"}`;
+  // Technical note for admins/debugging only, not shown to everyday users.
+  $("#dataTag").title = "写入保证：无原子创建／无条件更新（去重收敛＋写后读回）";
 }
 
 async function init() {
@@ -376,7 +378,10 @@ async function init() {
       await withTimeout(connectBase(), 90000, "连接多维表格");
       sel.append(new Option(baseActor.label, "base"));
       // Self-test writes a record: offer it to Base admins only.
-      if (embeddedBitable() && baseActor.registered && baseActor.role === "admin") $("#selftest").hidden = false;
+      // Fault injection and the self-test are diagnostics: Base admins only.
+      const isAdmin = baseActor.registered && baseActor.role === "admin";
+      $(".faults").hidden = !isAdmin;
+      if (embeddedBitable() && isAdmin) $("#selftest").hidden = false;
     } catch (e) {
       $("#dataTag").textContent = "未连接";
       $("#goalList").textContent = `${e.message}。工作台不会改用本地样例数据。请在多维表格插件中打开本页。`;
