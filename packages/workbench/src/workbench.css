@@ -24,7 +24,6 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .faults[open] > [hidden] { display: none; }
 .faults summary { cursor: pointer; color: var(--muted); }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; padding: 12px 16px; }
-@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .goals { order: -1; } }
 .calendar, .goals, .log { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .grid { display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); overflow-x: auto; }
 .dayHead { padding: 6px 4px; text-align: center; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
@@ -72,3 +71,23 @@ dialog label { display: block; margin: 6px 0; }
 .setupStatus, .setupDetail { color: var(--muted); font-size: 12px; }
 .layout[hidden], .log[hidden] { display: none; }
 .newgoal[hidden] { display: none; }
+.goalsToggle { display: none; margin-left: auto; }
+.goalBody[hidden] { display: none; }
+/* Narrow widths (the Base sidebar is ~400-700px): calendar first, goals below,
+   both on screen at once so a goal can still be dragged up into the calendar. */
+@media (max-width: 860px) {
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+  .bar { padding: 6px 8px; gap: 6px; }
+  .bar .tag { display: none; }
+  .notice { margin: 8px 8px 0; }
+  .layout { flex: 1 1 auto; min-height: 0; grid-template-columns: 1fr; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); gap: 8px; padding: 8px; }
+  .layout.goalsCollapsed { grid-template-rows: minmax(0, 1fr) auto; }
+  .calendar { overflow: auto; }
+  .grid { overflow: visible; grid-template-columns: 36px repeat(7, minmax(0, 1fr)); }
+  .dayHead { z-index: 2; font-size: 11px; padding: 4px 1px; }
+  .goals { max-height: none; overflow: auto; }
+  .goalsToggle { display: inline-block; }
+  .goals .hint { display: none; }
+  .log { flex: none; margin: 0 8px 8px; padding: 4px 8px; }
+  .log ol { max-height: 3.4em; }
+}

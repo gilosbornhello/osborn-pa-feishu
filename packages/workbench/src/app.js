@@ -123,6 +123,19 @@ function setupNewGoal() {
   });
 }
 
+// Narrow widths only (the toggle is hidden by CSS otherwise): fold the goals
+// panel so the calendar gets the full height. Dragging a goal needs it open.
+function setGoalsCollapsed(collapsed) {
+  const btn = $("#goalsToggle");
+  $(".layout").classList.toggle("goalsCollapsed", collapsed);
+  $("#goalBody").hidden = collapsed;
+  btn.setAttribute("aria-expanded", String(!collapsed));
+  btn.textContent = collapsed ? "展开目标" : "收起目标";
+}
+function setupGoalsToggle() {
+  $("#goalsToggle").onclick = () => setGoalsCollapsed(!$("#goalBody").hidden);
+}
+
 function renderGoals(goals) {
   const visible = goals.filter((g) => !g.archived && canReadGoal(actor(), g, null))
     .map((g) => ({ ...g, ...scoreGoal(g) }));
@@ -466,8 +479,10 @@ async function init() {
   // Another real tab wrote to the shared store: show its data (this tab's
   // writes would hit a revision conflict anyway, never overwrite it).
   window.addEventListener("storage", (e) => { if (e.key === STORE_KEY) render(); });
+  setupGoalsToggle();
   document.querySelectorAll(".tabs [role=tab]").forEach((t) => {
     t.onclick = () => {
+      setGoalsCollapsed(false);
       goalView = t.dataset.view;
       document.querySelectorAll(".tabs [role=tab]").forEach((x) => x.setAttribute("aria-selected", String(x === t)));
       render();

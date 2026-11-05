@@ -45,8 +45,10 @@
     <div class="tabs" role="tablist">
       <button role="tab" data-view="board" aria-selected="true">目标看板</button>
       <button role="tab" data-view="priority" aria-selected="false">轻重缓急</button>
+      <button type="button" id="goalsToggle" class="goalsToggle" aria-expanded="true" aria-controls="goalBody">收起目标</button>
     </div>
-    <p class="hint">拖动目标到左侧时间格安排；或点“安排…”填写时间。两种视图读取同一份目标记录。</p>
+    <div id="goalBody" class="goalBody">
+    <p class="hint">把目标拖到日历的时间格安排；或点“安排…”填写时间。两种视图读取同一份目标记录。</p>
     <form id="newGoal" class="newgoal" hidden>
       <input name="title" placeholder="新建目标，例如：写周报" maxlength="200" required aria-label="目标名称">
       <select name="bucket" aria-label="时间段"></select>
@@ -54,6 +56,7 @@
       <button id="newGoalSubmit">添加</button>
     </form>
     <div id="goalList"></div>
+    </div>
   </aside>
 </main>
 <section class="log" aria-live="polite">
