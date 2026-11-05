@@ -4,8 +4,21 @@
     {
       "name": "workbench",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["tools/serve-workbench.mjs"],
+      "runtimeArgs": [
+        "tools/serve-workbench.mjs"
+      ],
       "port": 4317
+    },
+    {
+      "name": "tableview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "packages/table-view",
+        "run",
+        "dev"
+      ],
+      "port": 8080
     }
   ]
 }

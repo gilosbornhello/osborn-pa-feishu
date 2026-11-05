@@ -61,6 +61,21 @@ export function withTimeout(promise, ms, what) {
   ]).finally(() => clearTimeout(timer));
 }
 
+// Two hosts, one `bitable` object shape:
+// - table-view extension (enterprise self-built app): the bundle entry sets
+//   globalThis.__osbornBitable from @lark-opdev/block-bitable-api;
+// - sidebar plugin page (妙搭 hosting): @lark-base-open/js-sdk from the CDN.
+const SIDEBAR_SDK_URL = "https://cdn.jsdelivr.net/npm/@lark-base-open/js-sdk@1.0.2/+esm";
+export function embeddedBitable() {
+  return globalThis.__osbornBitable || null;
+}
+export async function loadBitable(timeoutMs) {
+  const injected = embeddedBitable();
+  if (injected) return injected;
+  const sdk = await withTimeout(import(/* webpackIgnore: true */ SIDEBAR_SDK_URL), timeoutMs, "加载 SDK");
+  return sdk.bitable;
+}
+
 export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialFaults, callTimeoutMs = 0, onStep } = {}) {
   const faults = { loseNextResponse: false, failNextBeforeCommit: false, ...initialFaults };
   let schema = null;
@@ -265,6 +280,34 @@ export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialF
       const canon = canonicalByOperation(await blocksByOperation(operationKey)).get(operationKey);
       if (!canon) throw new OutcomeUnknownError("created record not found on read-back");
       return maybeLoseResponse({ created: canon.id === recordId, block: canon });
+    },
+
+    // Same idempotency scheme as time blocks: business_id carries the key,
+    // re-read after writing, lowest record id wins if two clients raced.
+    async createGoalOnce(operationKey, row) {
+      maybeFailBeforeCommit();
+      await loadSchema();
+      const businessId = `g:${operationKey}`;
+      const byKey = async () => (await scan("goals")).map(toGoal).filter((g) => g.businessId === businessId)
+        .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
+      const existing = await byKey();
+      if (existing) return maybeLoseResponse({ created: false, goal: existing });
+      const values = {
+        title: writeText(row.title),
+        business_id: writeText(businessId),
+        accountable_owner: [row.owner?.id ? { id: row.owner.id } : { id: row.ownerId }],
+        visibility: selectValue("goals", "visibility", row.visibility || "project"),
+        status: selectValue("goals", "status", row.status || "not_started"),
+        bucket: selectValue("goals", "bucket", row.bucket || "inbox"),
+        archived: false,
+        importance_manual: 50,
+        urgency_manual: 35,
+        revision: 1,
+      };
+      const recordId = await sdkWrite(() => schema.goals.table.addRecord(encode("goals", values)));
+      const canon = await byKey();
+      if (!canon) throw new OutcomeUnknownError("created goal not found on read-back");
+      return maybeLoseResponse({ created: canon.id === recordId, goal: canon });
     },
 
     // `expected` catches edits made directly in the table, which keep revision.

@@ -2,12 +2,11 @@
 // Base with synthetic data: it creates one time block on a goal you own,
 // moves it, then leaves it cancelled. Nothing is deleted.
 
-import { createBaseSdkPort, withTimeout } from "./base-sdk-port.js";
+import { createBaseSdkPort, withTimeout, loadBitable, embeddedBitable } from "./base-sdk-port.js";
 import { scheduleGoal, rescheduleBlock, cancelBlock, reconcile } from "../../rules/src/commands.js";
 import { canScheduleGoal } from "../../rules/src/policy.js";
 import { addDays, wallParts, wallToInstant } from "../../rules/src/time.js";
 
-const SDK_URL = "https://cdn.jsdelivr.net/npm/@lark-base-open/js-sdk@1.0.2/+esm";
 const TZ = "Asia/Shanghai";
 const rows = document.querySelector("#rows");
 const results = [];
@@ -25,8 +24,8 @@ async function run() {
   try { embedded = window.top !== window; } catch { embedded = true; }
   row("运行环境", "在多维表格插件（iframe）内", `${embedded ? "在 iframe 内" : "不在 iframe 内（直接打开的网页）"} · 来源 ${document.referrer ? new URL(document.referrer).hostname.replace(/^[^.]+/, "*") : "无"}`, embedded);
   const t0 = Date.now();
-  const { bitable } = await withTimeout(import(SDK_URL), 15000, "加载 SDK");
-  row("加载 SDK", "加载成功", `${Date.now() - t0} ms`, true);
+  const bitable = await loadBitable(15000);
+  row("加载 SDK", "加载成功", `${embeddedBitable() ? "数据表视图插件 SDK（已打包）" : "边栏插件 SDK（CDN）"} · ${Date.now() - t0} ms`, true);
   // Every schema call is timed separately and gets its own row.
   const port = createBaseSdkPort(bitable.base, {
     tz: TZ, callTimeoutMs: 15000,

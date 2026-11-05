@@ -21,6 +21,7 @@
       <button id="otherTab">模拟另一标签页改动首个安排</button>
       <button id="reload">刷新读回</button>
       <button id="reset">重置合成数据</button>
+      <button id="selftest" hidden>写入自检（仅限测试 Base）</button>
     </details>
   </div>
 </header>
@@ -34,6 +35,12 @@
       <button role="tab" data-view="priority" aria-selected="false">轻重缓急</button>
     </div>
     <p class="hint">拖动目标到左侧时间格安排；或点“安排…”填写时间。两种视图读取同一份目标记录。</p>
+    <form id="newGoal" class="newgoal" hidden>
+      <input name="title" placeholder="新建目标，例如：写周报" maxlength="200" required aria-label="目标名称">
+      <select name="bucket" aria-label="时间段"></select>
+      <label title="私有目标只在工作台里对别人隐藏"><input type="checkbox" name="private"> 私有</label>
+      <button id="newGoalSubmit">添加</button>
+    </form>
     <div id="goalList"></div>
   </aside>
 </main>

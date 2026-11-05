@@ -31,3 +31,9 @@ dist/
 .cache/
 .claude/settings.local.json
 dist-hosted/
+
+# Table-view extension: generated from local/instances (real ids), build output
+packages/table-view/app.json
+packages/table-view/block/block.json
+packages/table-view/block/debug.json
+packages/table-view/block/dist/

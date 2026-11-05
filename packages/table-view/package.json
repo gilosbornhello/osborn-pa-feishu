@@ -1,0 +1,26 @@
+{
+  "name": "@osborn-pa/table-view",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Osborn PA workbench packaged as a Feishu Base table-view extension (enterprise self-built app).",
+  "license": "UNLICENSED",
+  "scripts": {
+    "prepare:ids": "node prepare.mjs",
+    "dev": "cd block && NODE_ENV=development webpack serve --config ../webpack.config.cjs",
+    "build": "cd block && NODE_ENV=production webpack --config ../webpack.config.cjs",
+    "upload": "npm run build && cd block && opdev upload ./dist"
+  },
+  "dependencies": {
+    "@lark-opdev/block-bitable-api": "0.4.0"
+  },
+  "devDependencies": {
+    "@lark-opdev/block-bitable-webpack-utils": "0.1.7",
+    "css-loader": "6.11.0",
+    "html-webpack-plugin": "5.6.3",
+    "mini-css-extract-plugin": "2.9.2",
+    "style-loader": "3.3.4",
+    "webpack": "5.97.1",
+    "webpack-cli": "5.1.4",
+    "webpack-dev-server": "5.2.0"
+  }
+}

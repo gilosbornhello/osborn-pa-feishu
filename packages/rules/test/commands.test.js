@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile } from "../src/commands.js";
+import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile, createGoal } from "../src/commands.js";
 import { createMemoryPort } from "../src/memory-port.js";
 import { redactBlockForViewer } from "../src/policy.js";
 
@@ -140,4 +140,23 @@ test("snapshot check: a change that kept revision is a conflict; a matching snap
   assert.equal((await port.getTimeBlock(block.id)).startMs, T("09:00"));
   const ok = await rescheduleBlock(port, alice, { blockId: block.id, startMs: T("11:00"), endMs: T("12:00"), expectedRevision: 1, expected: seen, operationKey: "op-s3" });
   assert.equal(ok.status, "committed");
+});
+
+test("createGoal: owner is the actor, same key creates once, guests rejected", async () => {
+  const port = createMemoryPort(seed());
+  const a = await createGoal(port, bob, { title: "  试用：整理周报  ", bucket: "today", visibility: "private", operationKey: "g-op-1" });
+  assert.equal(a.status, "committed");
+  assert.equal(a.goal.title, "试用：整理周报");
+  assert.equal(a.goal.ownerId, "u_bob");
+  assert.equal(a.goal.bucket, "today");
+  assert.equal(a.goal.visibility, "private");
+  const again = await createGoal(port, bob, { title: "试用：整理周报", bucket: "today", operationKey: "g-op-1" });
+  assert.equal(again.status, "duplicate");
+  assert.equal(again.goal.id, a.goal.id);
+  assert.equal((await port.listGoals()).length, 4);
+  assert.equal((await createGoal(port, guest, { title: "x", operationKey: "g-op-2" })).reason, "forbidden");
+  assert.equal((await createGoal(port, bob, { title: " ", operationKey: "g-op-3" })).reason, "empty_title");
+  assert.equal((await createGoal(port, bob, { title: "x", bucket: "someday", operationKey: "g-op-4" })).reason, "invalid_bucket");
+  assert.equal((await createGoal(port, bob, { title: "x", operationKey: "" })).reason, "operation_key_required");
+  assert.equal((await port.listGoals()).length, 4, "rejected creates write nothing");
 });

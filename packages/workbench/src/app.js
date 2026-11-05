@@ -10,14 +10,14 @@
 //                  local store if the SDK is unavailable.
 
 import { createMemoryPort } from "../../rules/src/memory-port.js";
-import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile } from "../../rules/src/commands.js";
+import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile, createGoal } from "../../rules/src/commands.js";
 import { canReadGoal, redactBlockForViewer } from "../../rules/src/policy.js";
 import { scoreGoal, compareGoals } from "../../rules/src/priority.js";
 import { BUCKETS } from "../../rules/src/period-shift.js";
 import { addDays, wallParts, wallToInstant } from "../../rules/src/time.js";
 import { GRID, weekDays, slotsPerDay, slotToRange, blockPlacement, moveRange } from "./slots.js";
 import { ACTORS, buildSeed } from "./seed.js";
-import { createBaseSdkPort, withTimeout } from "./base-sdk-port.js";
+import { createBaseSdkPort, withTimeout, loadBitable, embeddedBitable } from "./base-sdk-port.js";
 
 const TZ = "Asia/Shanghai";
 const STORE_KEY = "osborn-pa-workbench:v1";
@@ -36,8 +36,8 @@ const store = {
   load() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || "null"); } catch { return null; } },
   save(s) { try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch { /* storage unavailable */ } },
 };
-const SDK_URL = "https://cdn.jsdelivr.net/npm/@lark-base-open/js-sdk@1.0.2/+esm";
-const MODE = new URLSearchParams(location.search).get("data") === "base" ? "base" : "local";
+// Inside the table-view extension there is no query string: always Base mode.
+const MODE = embeddedBitable() || new URLSearchParams(location.search).get("data") === "base" ? "base" : "local";
 let port = MODE === "local" ? createMemoryPort(buildSeed(weekDays(today)[0], TZ), { store, faults: { latencyMs: 250 } }) : null;
 let baseActor = null; // resolved viewing user in base mode
 
@@ -98,6 +98,29 @@ async function runSchedule(goal, range, operationKey, source) {
   });
 }
 
+// Quick-add: the goal is owned by the current viewer. Hidden for read-only viewers.
+function canCreateGoals() {
+  const a = actor();
+  return Boolean(a.userId) && a.role !== "guest" && a.registered !== false;
+}
+function setupNewGoal() {
+  const f = $("#newGoal");
+  for (const b of BUCKETS) f.bucket.append(new Option(BUCKET_LABELS[b], b));
+  f.bucket.value = "today";
+  f.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const title = f.title.value.trim();
+    if (!title) return;
+    const operationKey = newKey("goal");
+    const input = { title, bucket: f.bucket.value, visibility: f.private.checked ? "private" : "project", operationKey };
+    $("#newGoalSubmit").disabled = true;
+    try {
+      const r = await runCommand(`新建目标「${title}」`, () => createGoal(port, actor(), input));
+      if (r.status === "committed" || r.status === "duplicate") { f.title.value = ""; f.private.checked = false; }
+    } finally { $("#newGoalSubmit").disabled = false; }
+  });
+}
+
 function renderGoals(goals) {
   const visible = goals.filter((g) => !g.archived && canReadGoal(actor(), g, null))
     .map((g) => ({ ...g, ...scoreGoal(g) }));
@@ -134,7 +157,12 @@ function renderGoals(goals) {
   } else {
     visible.sort(compareGoals).forEach((g) => list.append(card(g)));
   }
-  if (!visible.length) list.textContent = "当前身份没有可见目标（不是加载失败）。";
+  $("#newGoal").hidden = !canCreateGoals();
+  if (!visible.length) {
+    list.textContent = canCreateGoals()
+      ? "还没有你能看到的目标。在上面输入一个目标名称并点“添加”，它就会出现在这里，然后可以拖进日历。"
+      : "当前身份没有可见目标（不是加载失败）。";
+  }
 }
 
 function renderCalendar(blocks) {
@@ -306,13 +334,12 @@ async function render() {
 
 async function connectBase() {
   $("#dataTag").textContent = "连接当前多维表格…";
-  let sdk;
+  let bitable;
   try {
-    sdk = await Promise.race([import(SDK_URL), new Promise((_, no) => setTimeout(() => no(new Error("加载 SDK 超时")), 8000))]);
+    bitable = await loadBitable(8000);
   } catch (e) {
     throw new Error(`无法加载 Base SDK：${e.message}`);
   }
-  const { bitable } = sdk;
   const p = createBaseSdkPort(bitable.base, { tz: TZ, callTimeoutMs: 8000, onStep: ({ what, ok }) => { if (ok) $("#dataTag").textContent = `连接中：${what} ✓`; } });
   await p.loadSchema();
   const userId = await withTimeout(bitable.bridge.getUserId(), 8000, "读取当前用户 getUserId");
@@ -332,12 +359,24 @@ async function init() {
   if (MODE === "base") {
     document.body.classList.add("mode-base");
     for (const id of ["#otherTab", "#reset"]) $(id).hidden = true;
+    // Table-view host only: the self-test ships in the same package (selftest.html).
+    if (embeddedBitable()) {
+      // Two clicks instead of confirm(): modal dialogs may be blocked in the host iframe.
+      let armed = false;
+      $("#selftest").onclick = () => {
+        if (armed) { location.href = "./selftest.html"; return; }
+        armed = true;
+        $("#selftest").textContent = "会新建 1 条测试记录并标为已取消；只在测试 Base 用。再点一次开始";
+      };
+    }
     sel.disabled = true;
     try {
       // Outside a Base plugin the SDK loads but its calls never answer.
       // Each SDK call has its own 8 s timeout naming the call; this is only a backstop.
       await withTimeout(connectBase(), 90000, "连接多维表格");
       sel.append(new Option(baseActor.label, "base"));
+      // Self-test writes a record: offer it to Base admins only.
+      if (embeddedBitable() && baseActor.registered && baseActor.role === "admin") $("#selftest").hidden = false;
     } catch (e) {
       $("#dataTag").textContent = "未连接";
       $("#goalList").textContent = `${e.message}。工作台不会改用本地样例数据。请在多维表格插件中打开本页。`;
@@ -368,6 +407,7 @@ async function init() {
       render();
     };
   });
+  setupNewGoal();
   render();
 }
 init();

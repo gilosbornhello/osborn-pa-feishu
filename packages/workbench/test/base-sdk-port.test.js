@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createBaseSdkPort, canonicalByOperation, readText, readSelect } from "../src/base-sdk-port.js";
-import { scheduleGoal, rescheduleBlock, cancelBlock, reconcile } from "../../rules/src/commands.js";
+import { scheduleGoal, rescheduleBlock, cancelBlock, reconcile, createGoal } from "../../rules/src/commands.js";
 
 // Fake of the Base JS SDK subset the port uses, with the SDK's cell shapes:
 // text = segments, select = {id,text}, user = [{id,name}], link = {recordIds,tableId}, datetime = ms.
@@ -238,4 +238,21 @@ test("an edit made directly in the table (revision unchanged) → conflict when 
   const fresh = { startMs: now.startMs, endMs: now.endMs, state: now.state };
   const ok = await cancelBlock(port, actor, { blockId: block.id, expectedRevision: 1, expected: fresh, operationKey: "cancel:fresh" });
   assert.equal(ok.status, "committed", "a caller that saw the current values may write");
+});
+
+test("createGoal writes one goal in SDK shapes owned by the viewer; same key → duplicate", async () => {
+  const { f, port, actor } = await setup();
+  const goalsT = f.tables.get("目标任务");
+  const a = await createGoal(port, actor, { title: "试用目标", bucket: "today", visibility: "private", operationKey: "goal-op-1" });
+  assert.equal(a.status, "committed");
+  assert.equal(a.goal.title, "试用目标");
+  assert.equal(a.goal.ownerId, f.me.id);
+  assert.equal(a.goal.bucket, "today");
+  assert.equal(a.goal.visibility, "private");
+  const raw = goalsT.records.get(a.goal.id);
+  assert.deepEqual(raw[f.fid(goalsT, "accountable_owner")], [{ id: f.me.id }]);
+  assert.equal(readText(raw[f.fid(goalsT, "business_id")]), "g:goal-op-1");
+  const again = await createGoal(port, actor, { title: "试用目标", bucket: "today", operationKey: "goal-op-1" });
+  assert.equal(again.status, "duplicate");
+  assert.equal(goalsT.records.size, 2);
 });

@@ -18,6 +18,7 @@
 //              callers must reconcile(operationKey) instead of retrying blindly
 
 import { canEditTimeBlock, canScheduleGoal, POLICY_VERSION } from "./policy.js";
+import { BUCKETS } from "./period-shift.js";
 
 export const COMMAND_CONTRACT_VERSION = "commands@1";
 export const MAX_BLOCK_MS = 31 * 86_400_000;
@@ -74,6 +75,26 @@ export async function scheduleGoal(port, actor, { goalId, startMs, endMs, operat
       timezone: timezone || "Asia/Shanghai", state: "planned", source: actor.source || "workbench",
     });
     return receipt(result.created ? "committed" : "duplicate", { operationKey, block: result.block });
+  });
+}
+
+/**
+ * Quick-add a goal owned by the actor (workbench "新建目标"). One goal per
+ * operationKey. Guests and unregistered viewers cannot create goals.
+ */
+export async function createGoal(port, actor, { title, bucket = "inbox", visibility = "project", operationKey }) {
+  if (!operationKey) return receipt("rejected", { reason: "operation_key_required" });
+  if (!actor?.userId || actor.role === "guest" || actor.registered === false) return receipt("rejected", { operationKey, reason: "forbidden" });
+  const titleError = validateTitle(title);
+  if (titleError) return receipt("rejected", { operationKey, reason: titleError });
+  if (!BUCKETS.includes(bucket)) return receipt("rejected", { operationKey, reason: "invalid_bucket" });
+  if (!["private", "project"].includes(visibility)) return receipt("rejected", { operationKey, reason: "invalid_visibility" });
+  return guard(port, operationKey, async () => {
+    const result = await port.createGoalOnce(operationKey, {
+      title: String(title).trim(), ownerId: actor.userId, owner: actor.account || null,
+      bucket, visibility, status: "not_started", archived: false,
+    });
+    return receipt(result.created ? "committed" : "duplicate", { operationKey, goal: result.goal });
   });
 }
 

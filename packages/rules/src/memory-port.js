@@ -104,6 +104,21 @@ export function createMemoryPort(seed = {}, options = {}) {
       log.push({ op: "update", operationKey, id, patch });
       return maybeLoseResponse({ duplicate: false, block: clone(next) });
     },
+    async createGoalOnce(operationKey, row) {
+      maybeFailBeforeCommit();
+      refresh();
+      const businessId = `g:${operationKey}`;
+      const existing = [...goals.values()].find((g) => g.businessId === businessId);
+      if (existing) return maybeLoseResponse({ created: false, goal: clone(existing) });
+      const { owner, ...rest } = row;
+      let id;
+      do id = `goal_${++seq}`; while (goals.has(id));
+      const goal = { id, businessId, ...rest, revision: 1 };
+      goals.set(goal.id, goal);
+      save();
+      log.push({ op: "createGoal", operationKey, id: goal.id });
+      return maybeLoseResponse({ created: true, goal: clone(goal) });
+    },
     async patchGoal(id, patch) {
       refresh();
       const g = goals.get(id);
