@@ -1,0 +1,21 @@
+{
+  "name": "@osborn-pa/sidebar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Osborn PA workbench as a Feishu Base sidebar extension (marketplace build). Single-file bundle with the Base JS SDK included.",
+  "license": "UNLICENSED",
+  "output": "dist",
+  "scripts": {
+    "build": "NODE_ENV=production webpack --config ./webpack.config.cjs"
+  },
+  "dependencies": {
+    "@lark-base-open/js-sdk": "1.0.2"
+  },
+  "devDependencies": {
+    "css-loader": "6.11.0",
+    "html-webpack-plugin": "5.6.3",
+    "mini-css-extract-plugin": "2.9.2",
+    "webpack": "5.97.1",
+    "webpack-cli": "5.1.4"
+  }
+}

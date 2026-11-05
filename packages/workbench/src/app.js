@@ -10,7 +10,7 @@
 //                  local store if the SDK is unavailable.
 
 import { createMemoryPort } from "../../rules/src/memory-port.js";
-import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile, createGoal } from "../../rules/src/commands.js";
+import { scheduleGoal, rescheduleBlock, cancelBlock, completeBlock, reconcile, createGoal, joinWorkspace } from "../../rules/src/commands.js";
 import { canReadGoal, redactBlockForViewer } from "../../rules/src/policy.js";
 import { scoreGoal, compareGoals } from "../../rules/src/priority.js";
 import { BUCKETS } from "../../rules/src/period-shift.js";
@@ -18,6 +18,8 @@ import { addDays, wallParts, wallToInstant } from "../../rules/src/time.js";
 import { GRID, weekDays, slotsPerDay, slotToRange, blockPlacement, moveRange } from "./slots.js";
 import { ACTORS, buildSeed } from "./seed.js";
 import { createBaseSdkPort, withTimeout, loadBitable, embeddedBitable } from "./base-sdk-port.js";
+import { planBaseSetup, applyBaseSetup } from "./base-setup.js";
+import { MANIFEST } from "../../schema/manifest.js";
 
 const TZ = "Asia/Shanghai";
 const STORE_KEY = "osborn-pa-workbench:v1";
@@ -340,6 +342,9 @@ async function connectBase() {
   } catch (e) {
     throw new Error(`无法加载 Base SDK：${e.message}`);
   }
+  // First run in this Base: offer to create the tables instead of failing.
+  const plan = await withTimeout(planBaseSetup(bitable.base, MANIFEST), 30000, "检查数据表结构");
+  if (plan.steps.length || plan.conflicts.length) { showSetup(bitable.base, plan); return false; }
   const p = createBaseSdkPort(bitable.base, { tz: TZ, callTimeoutMs: 8000, onStep: ({ what, ok }) => { if (ok) $("#dataTag").textContent = `连接中：${what} ✓`; } });
   await p.loadSchema();
   const userId = await withTimeout(bitable.bridge.getUserId(), 8000, "读取当前用户 getUserId");
@@ -351,9 +356,60 @@ async function connectBase() {
   for (const t of [s.timeBlocks.table, s.goals.table]) {
     try { t.onRecordAdd(refresh); t.onRecordModify(refresh); t.onRecordDelete?.(refresh); } catch { /* events optional */ }
   }
-  $("#dataTag").textContent = `当前多维表格 · ${baseActor.label}${baseActor.registered ? "" : " · 未在成员表登记，只读"}`;
+  $("#dataTag").textContent = `当前多维表格 · ${baseActor.label}`;
   // Technical note for admins/debugging only, not shown to everyday users.
   $("#dataTag").title = "写入保证：无原子创建／无条件更新（去重收敛＋写后读回）";
+  if (!baseActor.registered) await showJoin(p);
+  return true;
+}
+
+function showSetup(base, plan) {
+  $("#dataTag").textContent = "当前多维表格 · 需要初始化";
+  $(".layout").hidden = true;
+  $(".log").hidden = true;
+  $("#setup").hidden = false;
+  const tables = plan.steps.filter((x) => x.op === "create_table").map((x) => x.table);
+  const fields = plan.steps.filter((x) => x.op === "create_field").length;
+  $("#setupDetail").textContent = plan.conflicts.length
+    ? `已有字段类型不符，不能自动处理：${plan.conflicts.map((c) => `${c.table}.${c.field}`).join("、")}。请改名或删除这些字段后刷新。`
+    : `将新建 ${tables.length} 张表${tables.length ? `（${tables.join("、")}）` : ""}，补 ${fields} 个字段。`;
+  $("#setupRun").disabled = plan.conflicts.length > 0;
+  $("#setupRun").onclick = async () => {
+    $("#setupRun").disabled = true;
+    try {
+      const after = await applyBaseSetup(base, MANIFEST, { onStep: ({ done, total, label }) => { $("#setupStatus").textContent = `${done}/${total} ${label}`; } });
+      if (after.steps.length) throw new Error(`还有 ${after.steps.length} 步未完成`);
+      $("#setupStatus").textContent = "已完成，正在打开工作台…";
+      location.reload();
+    } catch (e) {
+      $("#setupStatus").textContent = `创建失败：${e.message}。可能是没有这个多维表格的管理权限；已创建的部分会保留，再点一次会接着创建。`;
+      $("#setupRun").disabled = false;
+    }
+  };
+}
+
+async function showJoin(p) {
+  const bar = $("#join");
+  if (baseActor.canJoin === false) {
+    $("#joinText").textContent = "你在成员表里的账号已停用，目前只能查看。需要使用请联系管理员。";
+    $("#joinRun").hidden = true;
+    bar.hidden = false;
+    return;
+  }
+  const first = (await p.countActiveAdmins()) === 0;
+  $("#joinText").textContent = first
+    ? "这个工作台还没有管理员。你是第一个使用的人，加入后将成为管理员。"
+    : "你还没加入这个工作台，目前只能查看。加入后可以新建目标、排时间。";
+  $("#joinRun").textContent = first ? "加入并成为管理员" : "加入";
+  $("#joinRun").onclick = async () => {
+    $("#joinRun").disabled = true;
+    $("#joinStatus").textContent = "正在加入…";
+    const r = await joinWorkspace(p, baseActor);
+    if (r.status === "committed" || r.status === "duplicate") { $("#joinStatus").textContent = "已加入，正在刷新…"; location.reload(); return; }
+    $("#joinStatus").textContent = `加入失败（${r.reason || r.status}）。请刷新后重试。`;
+    $("#joinRun").disabled = false;
+  };
+  bar.hidden = false;
 }
 
 async function init() {
@@ -361,6 +417,7 @@ async function init() {
   if (MODE === "base") {
     document.body.classList.add("mode-base");
     for (const id of ["#otherTab", "#reset"]) $(id).hidden = true;
+    $(".faults").hidden = true; // shown again below for Base admins only
     // Table-view host only: the self-test ships in the same package (selftest.html).
     if (embeddedBitable()) {
       // Two clicks instead of confirm(): modal dialogs may be blocked in the host iframe.
@@ -375,13 +432,17 @@ async function init() {
     try {
       // Outside a Base plugin the SDK loads but its calls never answer.
       // Each SDK call has its own 8 s timeout naming the call; this is only a backstop.
-      await withTimeout(connectBase(), 90000, "连接多维表格");
+      const ready = await withTimeout(connectBase(), 90000, "连接多维表格");
+      if (!ready) return; // waiting for first-run setup
       sel.append(new Option(baseActor.label, "base"));
       // Self-test writes a record: offer it to Base admins only.
       // Fault injection and the self-test are diagnostics: Base admins only.
+      // Only builds that opt in (the in-house table view) carry diagnostics;
+      // the marketplace sidebar build never shows them.
       const isAdmin = baseActor.registered && baseActor.role === "admin";
-      $(".faults").hidden = !isAdmin;
-      if (embeddedBitable() && isAdmin) $("#selftest").hidden = false;
+      const diagnostics = globalThis.__osbornDiagnostics === true || !embeddedBitable();
+      $(".faults").hidden = !(isAdmin && diagnostics);
+      if (embeddedBitable() && isAdmin && diagnostics) $("#selftest").hidden = false;
     } catch (e) {
       $("#dataTag").textContent = "未连接";
       $("#goalList").textContent = `${e.message}。工作台不会改用本地样例数据。请在多维表格插件中打开本页。`;

@@ -98,6 +98,22 @@ export async function createGoal(port, actor, { title, bucket = "inbox", visibil
   });
 }
 
+/**
+ * Self-service join for a Base extension viewer who is not in the members
+ * table yet. If the Base has no active admin, the first person to join becomes
+ * admin; everyone else joins as member. Deactivated members cannot rejoin.
+ */
+export async function joinWorkspace(port, viewer) {
+  if (!viewer?.userId) return receipt("rejected", { reason: "no_user" });
+  if (viewer.registered) return receipt("duplicate", { role: viewer.role });
+  if (viewer.canJoin === false) return receipt("rejected", { reason: "member_inactive" });
+  const role = (await port.countActiveAdmins()) === 0 ? "admin" : "member";
+  return guard(port, `join:${viewer.userId}`, async () => {
+    const r = await port.addMemberOnce(viewer.userId, role);
+    return receipt(r.created ? "committed" : "duplicate", { role: r.created ? role : undefined });
+  });
+}
+
 /** Move an existing block (drag inside the calendar, or edit the times). */
 // `expected` (optional): { startMs, endMs, state } as the caller last saw the
 // block. The port reports a conflict if any given field differs, so an edit

@@ -64,3 +64,11 @@ dialog label { display: block; margin: 6px 0; }
 .newgoal select { padding: 3px 4px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; }
 .newgoal label { font-size: 12px; color: var(--muted); }
 .faults[hidden] { display: none; }
+.notice { margin: 12px 16px 0; padding: 12px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.notice h2 { font-size: 16px; margin: 0 0 6px; }
+.notice p { margin: 0 0 8px; }
+.notice button { font-weight: 600; }
+.notice[hidden] { display: none; }
+.setupStatus, .setupDetail { color: var(--muted); font-size: 12px; }
+.layout[hidden], .log[hidden] { display: none; }
+.newgoal[hidden] { display: none; }

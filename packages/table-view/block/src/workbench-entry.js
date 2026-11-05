@@ -4,4 +4,5 @@ import { bitable } from "@lark-opdev/block-bitable-api";
 import "../../../workbench/src/workbench.css";
 
 globalThis.__osbornBitable = bitable;
+globalThis.__osbornDiagnostics = true; // in-house build: admins get fault injection + self-test
 import("../../../workbench/src/app.js");

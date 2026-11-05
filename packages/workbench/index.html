@@ -25,6 +25,18 @@
     </details>
   </div>
 </header>
+<section id="setup" class="notice" hidden>
+  <h2>初始化工作台</h2>
+  <p>这个多维表格里还没有工作台需要的数据表（成员、项目、目标任务、时间安排等）。点下面的按钮自动创建；已有的表和数据不会被改动或删除。需要你对这个多维表格有管理权限。</p>
+  <p class="setupDetail" id="setupDetail"></p>
+  <button id="setupRun">一键创建数据表</button>
+  <p class="setupStatus" id="setupStatus" aria-live="polite"></p>
+</section>
+<section id="join" class="notice" hidden>
+  <p id="joinText"></p>
+  <button id="joinRun"></button>
+  <span class="setupStatus" id="joinStatus" aria-live="polite"></span>
+</section>
 <main class="layout">
   <section class="calendar" aria-label="日历时间安排">
     <div id="grid" class="grid"></div>

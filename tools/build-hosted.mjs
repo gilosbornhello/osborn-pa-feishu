@@ -26,6 +26,15 @@ writeFileSync(new URL("workbench.html", out), workbench);
 cpSync(new URL("../packages/workbench/probe.html", import.meta.url), new URL("probe.html", out));
 writeFileSync(new URL("selftest.js", out), bundle(new URL("../packages/workbench/src/selftest.js", import.meta.url)));
 cpSync(new URL("../packages/workbench/selftest.html", import.meta.url), new URL("selftest.html", out));
+// Marketplace sidebar build (packages/sidebar, run its `npm run build` first):
+// published as market.html / market.js / market.css for real-Base testing.
+const side = new URL("../packages/sidebar/dist/", import.meta.url);
+try {
+  const html = readFileSync(new URL("index.html", side), "utf8").replace('"./workbench.js"', '"./market.js"').replace('"./workbench.css"', '"./market.css"');
+  writeFileSync(new URL("market.html", out), html);
+  cpSync(new URL("workbench.js", side), new URL("market.js", out));
+  cpSync(new URL("workbench.css", side), new URL("market.css", out));
+} catch (e) { console.warn(`skip market build: ${e.message}`); }
 writeFileSync(new URL("index.html", out), `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Osborn PA Preview</title>

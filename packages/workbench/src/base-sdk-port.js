@@ -222,7 +222,8 @@ export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialF
     async resolveActor(userId) {
       const members = await scan("members");
       const row = members.find((m) => readUsers(m.cells.account).some((u) => u.id === userId));
-      if (!row || row.cells.active === false) return { userId, role: "guest", label: "未登记成员（只读）", registered: false };
+      if (!row) return { userId, role: "guest", label: "未加入（只读）", registered: false, canJoin: true };
+      if (row.cells.active === false) return { userId, role: "guest", label: "成员已停用（只读）", registered: false, canJoin: false };
       const account = readUsers(row.cells.account).find((u) => u.id === userId);
       const projects = (await scan("projects")).map(toProject);
       const own = projects.filter((p) => p.ownerId === userId).map((p) => p.id);
@@ -280,6 +281,37 @@ export function createBaseSdkPort(base, { tz = "Asia/Shanghai", faults: initialF
       const canon = canonicalByOperation(await blocksByOperation(operationKey)).get(operationKey);
       if (!canon) throw new OutcomeUnknownError("created record not found on read-back");
       return maybeLoseResponse({ created: canon.id === recordId, block: canon });
+    },
+
+    // ---- members (self-service join) ----
+    async countActiveAdmins() {
+      return (await scan("members")).filter((m) => m.cells.active !== false && readSelect(m.cells.product_role) === "admin" && readUsers(m.cells.account).length).length;
+    },
+
+    /** One member row per user (business_id m:<userId>); re-reads after writing. */
+    async addMemberOnce(userId, role) {
+      maybeFailBeforeCommit();
+      await loadSchema();
+      const businessId = `m:${userId}`;
+      const mine = async () => (await scan("members")).filter((m) => readText(m.cells.business_id) === businessId || readUsers(m.cells.account).some((u) => u.id === userId))
+        .sort((a, b) => (a.recordId < b.recordId ? -1 : a.recordId > b.recordId ? 1 : 0))[0];
+      const existing = await mine();
+      if (existing) return { created: false, recordId: existing.recordId };
+      const recordId = await sdkWrite(() => schema.members.table.addRecord(encode("members", {
+        display_label: writeText(""), // the workbench falls back to the account name
+        business_id: writeText(businessId),
+        account: [{ id: userId }],
+        product_role: selectValue("members", "product_role", role),
+        active: true,
+      })));
+      const row = await mine();
+      if (!row) throw new OutcomeUnknownError("member row not found on read-back");
+      // Use the account's display name once the Base has resolved it.
+      const name = readUsers(row.cells.account)[0]?.name;
+      if (name && row.recordId === recordId) {
+        await sdkWrite(() => schema.members.table.setRecord(recordId, encode("members", { display_label: writeText(name) })));
+      }
+      return { created: row.recordId === recordId, recordId: row.recordId };
     },
 
     // Same idempotency scheme as time blocks: business_id carries the key,
