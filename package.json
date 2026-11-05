@@ -9,9 +9,11 @@
     "node": ">=20"
   },
   "scripts": {
+    "build": "npm --prefix packages/sidebar ci && npm --prefix packages/sidebar run build",
     "test": "node --test \"packages/*/test/*.test.js\" \"tools/test/*.test.js\"",
     "manifest:hash": "node packages/schema/manifest-hash.mjs",
     "workbench": "node tools/serve-workbench.mjs",
     "check:public": "bash tools/check-public.sh"
-  }
+  },
+  "output": "packages/sidebar/dist"
 }

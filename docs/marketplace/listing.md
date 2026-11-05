@@ -11,7 +11,7 @@
 | --- | --- |
 | 选择类型 | 插件（Extension） |
 | 插件类型 | **边栏插件（Sidebar Extension）**。市场不提供“数据表视图”类型；本组织内试用用的数据表视图版本不能直接上架。 |
-| GitHub 仓库地址 | 【待定：上架专用仓库地址】。页面说明：可用公开仓库，或把私有仓库授权给 `bitable-open@bytedance.com`。 |
+| GitHub 仓库地址 | `https://github.com/osborn-studio/osborn-pa-feishu`（现有公开仓库，D2 选 B）。构建入口在仓库根目录：`npm run build` 构建边栏插件，`package.json` 的 `output` 指向 `packages/sidebar/dist`。 |
 | 可见范围 | 先选“当前组织”验证一轮，再改“公开”。 |
 
 ## 2. 基础信息
@@ -82,9 +82,9 @@ Osborn PA 工作台把“要做的目标”和“什么时候做”放进同一�
 
 | 字段 | 填写 |
 | --- | --- |
-| 联系开发者 | 【开发者或团队名】 |
-| 客服电话 | 【可对外的电话，选填】 |
-| 客服邮箱 | 【可对外的邮箱】 |
+| 联系开发者 | 上海町萌科技有限公司 |
+| 客服电话 | 13917701616 |
+| 客服邮箱 | gilberthello@gmail.com |
 
 ## 3. 定价
 
